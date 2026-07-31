@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Download, Plus, Search, Store } from "lucide-react";
@@ -27,14 +27,8 @@ export const Route = createFileRoute("/_authenticated/shops/")({
       { property: "og:description", content: "Manage the full Klinzo shop directory." },
     ],
   }),
-  component: ShopsLayout,
+  component: ShopsPage,
 });
-
-function ShopsLayout() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  if (pathname !== "/shops") return <Outlet />;
-  return <ShopsPage />;
-}
 
 const emptyShop = {
   code: "",

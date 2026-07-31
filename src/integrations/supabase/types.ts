@@ -78,6 +78,20 @@ export type Database = {
             foreignKeyName: "deliveries_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
+            referencedRelation: "label_stock_view"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "deliveries_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shop_label_stock_summary"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "deliveries_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
             referencedRelation: "shops"
             referencedColumns: ["id"]
           },
@@ -156,6 +170,13 @@ export type Database = {
             referencedRelation: "label_products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "label_order_lines_label_product_id_fkey"
+            columns: ["label_product_id"]
+            isOneToOne: false
+            referencedRelation: "label_stock_view"
+            referencedColumns: ["label_product_id"]
+          },
         ]
       }
       label_orders: {
@@ -190,6 +211,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "label_orders_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "label_stock_view"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "label_orders_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shop_label_stock_summary"
+            referencedColumns: ["shop_id"]
+          },
           {
             foreignKeyName: "label_orders_shop_id_fkey"
             columns: ["shop_id"]
@@ -321,6 +356,20 @@ export type Database = {
             foreignKeyName: "orders_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
+            referencedRelation: "label_stock_view"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "orders_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shop_label_stock_summary"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "orders_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
             referencedRelation: "shops"
             referencedColumns: ["id"]
           },
@@ -370,6 +419,20 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "orders"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "label_stock_view"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "payments_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shop_label_stock_summary"
+            referencedColumns: ["shop_id"]
           },
           {
             foreignKeyName: "payments_shop_id_fkey"
@@ -547,9 +610,41 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      label_stock_view: {
+        Row: {
+          design_type: number | null
+          is_low: boolean | null
+          label_product_id: string | null
+          label_product_key: string | null
+          label_product_name: string | null
+          low_stock_threshold: number | null
+          shop_id: string | null
+          shop_name: string | null
+          sort_order: number | null
+          stock: number | null
+        }
+        Relationships: []
+      }
+      shop_label_stock_summary: {
+        Row: {
+          design_type: number | null
+          has_label_order: boolean | null
+          include_in_dashboard: boolean | null
+          low_stock_count: number | null
+          shop_id: string | null
+          shop_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      available_months: {
+        Args: never
+        Returns: {
+          month: string
+        }[]
+      }
+      dashboard_summary: { Args: { p_month: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

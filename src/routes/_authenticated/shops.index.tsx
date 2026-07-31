@@ -18,7 +18,7 @@ import { downloadCsv } from "@/lib/export";
 import { dateLabel } from "@/lib/format";
 import type { Shop } from "@/lib/domain";
 
-export const Route = createFileRoute("/_authenticated/shops")({
+export const Route = createFileRoute("/_authenticated/shops/")({
   head: () => ({
     meta: [
       { title: "Shops — Klinzo Operations" },

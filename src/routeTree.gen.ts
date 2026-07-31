@@ -17,6 +17,8 @@ import { Route as AuthenticatedDeliveriesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedOrdersRouteImport } from './routes/_authenticated/orders'
 import { Route as AuthenticatedPaymentsRouteImport } from './routes/_authenticated/payments'
+import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedShopsIndexRouteImport } from './routes/_authenticated/shops.index'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -58,6 +60,16 @@ const AuthenticatedPaymentsRoute = AuthenticatedPaymentsRouteImport.update({
   path: '/payments',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedShopsIndexRoute = AuthenticatedShopsIndexRouteImport.update({
   id: '/shops/',
   path: '/shops/',
@@ -72,6 +84,8 @@ export interface FileRoutesByFullPath {
   '/labels': typeof AuthenticatedLabelsRoute
   '/orders': typeof AuthenticatedOrdersRoute
   '/payments': typeof AuthenticatedPaymentsRoute
+  '/reports': typeof AuthenticatedReportsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/shops/': typeof AuthenticatedShopsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -81,6 +95,8 @@ export interface FileRoutesByTo {
   '/labels': typeof AuthenticatedLabelsRoute
   '/orders': typeof AuthenticatedOrdersRoute
   '/payments': typeof AuthenticatedPaymentsRoute
+  '/reports': typeof AuthenticatedReportsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/': typeof AuthenticatedIndexRoute
   '/shops': typeof AuthenticatedShopsIndexRoute
 }
@@ -93,6 +109,8 @@ export interface FileRoutesById {
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/orders': typeof AuthenticatedOrdersRoute
   '/_authenticated/payments': typeof AuthenticatedPaymentsRoute
+  '/_authenticated/reports': typeof AuthenticatedReportsRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/shops/': typeof AuthenticatedShopsIndexRoute
 }
@@ -106,6 +124,8 @@ export interface FileRouteTypes {
     | '/labels'
     | '/orders'
     | '/payments'
+    | '/reports'
+    | '/settings'
     | '/shops/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -115,6 +135,8 @@ export interface FileRouteTypes {
     | '/labels'
     | '/orders'
     | '/payments'
+    | '/reports'
+    | '/settings'
     | '/'
     | '/shops'
   id:
@@ -126,6 +148,8 @@ export interface FileRouteTypes {
     | '/_authenticated/labels'
     | '/_authenticated/orders'
     | '/_authenticated/payments'
+    | '/_authenticated/reports'
+    | '/_authenticated/settings'
     | '/_authenticated/'
     | '/_authenticated/shops/'
   fileRoutesById: FileRoutesById
@@ -193,6 +217,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPaymentsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/reports': {
+      id: '/_authenticated/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof AuthenticatedReportsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/shops/': {
       id: '/_authenticated/shops/'
       path: '/shops'
@@ -209,6 +247,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedOrdersRoute: typeof AuthenticatedOrdersRoute
   AuthenticatedPaymentsRoute: typeof AuthenticatedPaymentsRoute
+  AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedShopsIndexRoute: typeof AuthenticatedShopsIndexRoute
 }
@@ -219,6 +259,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
   AuthenticatedOrdersRoute: AuthenticatedOrdersRoute,
   AuthenticatedPaymentsRoute: AuthenticatedPaymentsRoute,
+  AuthenticatedReportsRoute: AuthenticatedReportsRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedShopsIndexRoute: AuthenticatedShopsIndexRoute,
 }

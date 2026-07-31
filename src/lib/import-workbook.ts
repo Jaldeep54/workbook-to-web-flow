@@ -118,7 +118,7 @@ export async function importWorkbook(
         is_active: true,
       };
     })
-    .filter(Boolean) as Array<Record<string, unknown>>;
+    .filter(Boolean) as never[];
 
   if (shopPayload.length) {
     const { error } = await supabase.from("shops").upsert(shopPayload, { onConflict: "code" });
@@ -321,7 +321,7 @@ export async function importWorkbook(
         note: text(pick(row, ["Note", "Remark", "Description"])) || null,
       };
     })
-    .filter(Boolean) as Array<Record<string, unknown>>;
+    .filter(Boolean) as never[];
   if (costPayload.length) {
     onProgress(`Importing ${costPayload.length} variable costs…`);
     const { error } = await supabase.from("variable_costs").insert(costPayload);

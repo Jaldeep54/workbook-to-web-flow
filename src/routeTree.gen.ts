@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedCostsRouteImport } from './routes/_authenticated/costs'
 import { Route as AuthenticatedDeliveriesRouteImport } from './routes/_authenticated/deliveries'
 import { Route as AuthenticatedOrdersRouteImport } from './routes/_authenticated/orders'
+import { Route as AuthenticatedPaymentsRouteImport } from './routes/_authenticated/payments'
 import { Route as AuthenticatedShopsIndexRouteImport } from './routes/_authenticated/shops.index'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -30,6 +32,11 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCostsRoute = AuthenticatedCostsRouteImport.update({
+  id: '/costs',
+  path: '/costs',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDeliveriesRoute = AuthenticatedDeliveriesRouteImport.update({
   id: '/deliveries',
   path: '/deliveries',
@@ -38,6 +45,11 @@ const AuthenticatedDeliveriesRoute = AuthenticatedDeliveriesRouteImport.update({
 const AuthenticatedOrdersRoute = AuthenticatedOrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPaymentsRoute = AuthenticatedPaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedShopsIndexRoute = AuthenticatedShopsIndexRouteImport.update({
@@ -49,14 +61,18 @@ const AuthenticatedShopsIndexRoute = AuthenticatedShopsIndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/costs': typeof AuthenticatedCostsRoute
   '/deliveries': typeof AuthenticatedDeliveriesRoute
   '/orders': typeof AuthenticatedOrdersRoute
+  '/payments': typeof AuthenticatedPaymentsRoute
   '/shops/': typeof AuthenticatedShopsIndexRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/costs': typeof AuthenticatedCostsRoute
   '/deliveries': typeof AuthenticatedDeliveriesRoute
   '/orders': typeof AuthenticatedOrdersRoute
+  '/payments': typeof AuthenticatedPaymentsRoute
   '/': typeof AuthenticatedIndexRoute
   '/shops': typeof AuthenticatedShopsIndexRoute
 }
@@ -64,22 +80,40 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/costs': typeof AuthenticatedCostsRoute
   '/_authenticated/deliveries': typeof AuthenticatedDeliveriesRoute
   '/_authenticated/orders': typeof AuthenticatedOrdersRoute
+  '/_authenticated/payments': typeof AuthenticatedPaymentsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/shops/': typeof AuthenticatedShopsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/deliveries' | '/orders' | '/shops/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/costs'
+    | '/deliveries'
+    | '/orders'
+    | '/payments'
+    | '/shops/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/auth' | '/deliveries' | '/orders' | '/' | '/shops'
+  to:
+    | '/auth'
+    | '/costs'
+    | '/deliveries'
+    | '/orders'
+    | '/payments'
+    | '/'
+    | '/shops'
   id:
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/costs'
     | '/_authenticated/deliveries'
     | '/_authenticated/orders'
+    | '/_authenticated/payments'
     | '/_authenticated/'
     | '/_authenticated/shops/'
   fileRoutesById: FileRoutesById
@@ -112,6 +146,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/costs': {
+      id: '/_authenticated/costs'
+      path: '/costs'
+      fullPath: '/costs'
+      preLoaderRoute: typeof AuthenticatedCostsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/deliveries': {
       id: '/_authenticated/deliveries'
       path: '/deliveries'
@@ -126,6 +167,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOrdersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/payments': {
+      id: '/_authenticated/payments'
+      path: '/payments'
+      fullPath: '/payments'
+      preLoaderRoute: typeof AuthenticatedPaymentsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/shops/': {
       id: '/_authenticated/shops/'
       path: '/shops'
@@ -137,15 +185,19 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedCostsRoute: typeof AuthenticatedCostsRoute
   AuthenticatedDeliveriesRoute: typeof AuthenticatedDeliveriesRoute
   AuthenticatedOrdersRoute: typeof AuthenticatedOrdersRoute
+  AuthenticatedPaymentsRoute: typeof AuthenticatedPaymentsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedShopsIndexRoute: typeof AuthenticatedShopsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedCostsRoute: AuthenticatedCostsRoute,
   AuthenticatedDeliveriesRoute: AuthenticatedDeliveriesRoute,
   AuthenticatedOrdersRoute: AuthenticatedOrdersRoute,
+  AuthenticatedPaymentsRoute: AuthenticatedPaymentsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedShopsIndexRoute: AuthenticatedShopsIndexRoute,
 }

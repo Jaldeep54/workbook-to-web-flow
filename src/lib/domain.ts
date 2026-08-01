@@ -109,16 +109,9 @@ export function labelsFromSheets(sheets: number, labelsPerSheet: number): number
 }
 
 export const DELIVERY_STATUSES = ["Pending", "Delivered", "Cancelled"] as const;
+export const ORDER_STATUSES = ["Pending", "Delivered", "Cancelled"] as const;
 export const PAYMENT_STATUSES = ["Pending", "Received", "Partial"] as const;
-export const COST_TYPES = [
-  "Transport",
-  "Salary",
-  "Rent",
-  "Electricity",
-  "Marketing",
-  "Maintenance",
-  "Other",
-] as const;
+export const COST_TYPES = ["Transportation", "Others"] as const;
 
 export function monthKey(date: string | Date): string {
   const d = typeof date === "string" ? new Date(date) : date;

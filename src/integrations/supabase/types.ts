@@ -92,6 +92,13 @@ export type Database = {
             foreignKeyName: "deliveries_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
+            referencedRelation: "shop_sku_opportunity"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "deliveries_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
             referencedRelation: "shops"
             referencedColumns: ["id"]
           },
@@ -229,6 +236,13 @@ export type Database = {
             foreignKeyName: "label_orders_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
+            referencedRelation: "shop_sku_opportunity"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "label_orders_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
             referencedRelation: "shops"
             referencedColumns: ["id"]
           },
@@ -320,34 +334,40 @@ export type Database = {
       orders: {
         Row: {
           created_at: string
+          delivery_date: string | null
           id: string
           month: string | null
           notes: string | null
           order_date: string | null
           order_no: number
           shop_id: string
+          status: string
           total_qty: number
           updated_at: string
         }
         Insert: {
           created_at?: string
+          delivery_date?: string | null
           id?: string
           month?: string | null
           notes?: string | null
           order_date?: string | null
           order_no: number
           shop_id: string
+          status?: string
           total_qty?: number
           updated_at?: string
         }
         Update: {
           created_at?: string
+          delivery_date?: string | null
           id?: string
           month?: string | null
           notes?: string | null
           order_date?: string | null
           order_no?: number
           shop_id?: string
+          status?: string
           total_qty?: number
           updated_at?: string
         }
@@ -364,6 +384,13 @@ export type Database = {
             columns: ["shop_id"]
             isOneToOne: false
             referencedRelation: "shop_label_stock_summary"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "orders_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shop_sku_opportunity"
             referencedColumns: ["shop_id"]
           },
           {
@@ -438,6 +465,13 @@ export type Database = {
             foreignKeyName: "payments_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
+            referencedRelation: "shop_sku_opportunity"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "payments_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
             referencedRelation: "shops"
             referencedColumns: ["id"]
           },
@@ -505,6 +539,63 @@ export type Database = {
           id?: string
         }
         Relationships: []
+      }
+      shop_products: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          shop_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          shop_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          shop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_products_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "label_stock_view"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "shop_products_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shop_label_stock_summary"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "shop_products_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shop_sku_opportunity"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "shop_products_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shops: {
         Row: {
@@ -620,6 +711,7 @@ export type Database = {
           low_stock_threshold: number | null
           shop_id: string | null
           shop_name: string | null
+          shop_sells_product: boolean | null
           sort_order: number | null
           stock: number | null
         }
@@ -633,6 +725,21 @@ export type Database = {
           low_stock_count: number | null
           shop_id: string | null
           shop_name: string | null
+        }
+        Relationships: []
+      }
+      shop_sku_opportunity: {
+        Row: {
+          active_months: number | null
+          active_products: string[] | null
+          address: string | null
+          avg_monthly_sales: number | null
+          inactive_products: string[] | null
+          is_active: boolean | null
+          label_name: string | null
+          shop_id: string | null
+          shop_name: string | null
+          total_sales: number | null
         }
         Relationships: []
       }
@@ -651,6 +758,25 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      next_shop_code: { Args: never; Returns: number }
+      order_qty_by_product: {
+        Args: never
+        Returns: {
+          product_id: string
+          product_key: string
+          short_name: string
+          sort_order: number
+          total_qty: number
+        }[]
+      }
+      set_order_delivered: {
+        Args: { p_delivery_date: string; p_order_id: string }
+        Returns: string
+      }
+      set_order_status: {
+        Args: { p_delivery_date?: string; p_order_id: string; p_status: string }
+        Returns: undefined
       }
     }
     Enums: {

@@ -11,6 +11,8 @@ import {
   Store,
   Truck,
   ClipboardList,
+  CalendarDays,
+  Lightbulb,
   Menu,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -23,7 +25,9 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
   { to: "/shops", label: "Shops", icon: Store },
+  { to: "/sku-opportunity", label: "SKU opportunity", icon: Lightbulb },
   { to: "/orders", label: "Orders", icon: ClipboardList },
+  { to: "/delivery-sheet", label: "Delivery sheet", icon: CalendarDays },
   { to: "/deliveries", label: "Deliveries", icon: Truck },
   { to: "/payments", label: "Payments", icon: CreditCard },
   { to: "/labels", label: "Labels & stock", icon: Boxes },

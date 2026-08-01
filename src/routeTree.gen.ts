@@ -14,12 +14,14 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedCostsRouteImport } from './routes/_authenticated/costs'
 import { Route as AuthenticatedDeliveriesRouteImport } from './routes/_authenticated/deliveries'
+import { Route as AuthenticatedDeliverySheetRouteImport } from './routes/_authenticated/delivery-sheet'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedOrdersRouteImport } from './routes/_authenticated/orders'
 import { Route as AuthenticatedPaymentsRouteImport } from './routes/_authenticated/payments'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedSkuOpportunityRouteImport } from './routes/_authenticated/sku-opportunity'
 import { Route as AuthenticatedShopsIndexRouteImport } from './routes/_authenticated/shops.index'
 import { Route as AuthenticatedShopsShopIdRouteImport } from './routes/_authenticated/shops.$shopId'
 
@@ -47,6 +49,12 @@ const AuthenticatedDeliveriesRoute = AuthenticatedDeliveriesRouteImport.update({
   path: '/deliveries',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDeliverySheetRoute =
+  AuthenticatedDeliverySheetRouteImport.update({
+    id: '/delivery-sheet',
+    path: '/delivery-sheet',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -77,6 +85,12 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSkuOpportunityRoute =
+  AuthenticatedSkuOpportunityRouteImport.update({
+    id: '/sku-opportunity',
+    path: '/sku-opportunity',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedShopsIndexRoute = AuthenticatedShopsIndexRouteImport.update({
   id: '/shops/',
   path: '/shops/',
@@ -94,12 +108,14 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/costs': typeof AuthenticatedCostsRoute
   '/deliveries': typeof AuthenticatedDeliveriesRoute
+  '/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
   '/import': typeof AuthenticatedImportRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/orders': typeof AuthenticatedOrdersRoute
   '/payments': typeof AuthenticatedPaymentsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/sku-opportunity': typeof AuthenticatedSkuOpportunityRoute
   '/shops/$shopId': typeof AuthenticatedShopsShopIdRoute
   '/shops/': typeof AuthenticatedShopsIndexRoute
 }
@@ -107,12 +123,14 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/costs': typeof AuthenticatedCostsRoute
   '/deliveries': typeof AuthenticatedDeliveriesRoute
+  '/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
   '/import': typeof AuthenticatedImportRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/orders': typeof AuthenticatedOrdersRoute
   '/payments': typeof AuthenticatedPaymentsRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/sku-opportunity': typeof AuthenticatedSkuOpportunityRoute
   '/': typeof AuthenticatedIndexRoute
   '/shops/$shopId': typeof AuthenticatedShopsShopIdRoute
   '/shops': typeof AuthenticatedShopsIndexRoute
@@ -123,12 +141,14 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/costs': typeof AuthenticatedCostsRoute
   '/_authenticated/deliveries': typeof AuthenticatedDeliveriesRoute
+  '/_authenticated/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/orders': typeof AuthenticatedOrdersRoute
   '/_authenticated/payments': typeof AuthenticatedPaymentsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/sku-opportunity': typeof AuthenticatedSkuOpportunityRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/shops/$shopId': typeof AuthenticatedShopsShopIdRoute
   '/_authenticated/shops/': typeof AuthenticatedShopsIndexRoute
@@ -140,12 +160,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/costs'
     | '/deliveries'
+    | '/delivery-sheet'
     | '/import'
     | '/labels'
     | '/orders'
     | '/payments'
     | '/reports'
     | '/settings'
+    | '/sku-opportunity'
     | '/shops/$shopId'
     | '/shops/'
   fileRoutesByTo: FileRoutesByTo
@@ -153,12 +175,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/costs'
     | '/deliveries'
+    | '/delivery-sheet'
     | '/import'
     | '/labels'
     | '/orders'
     | '/payments'
     | '/reports'
     | '/settings'
+    | '/sku-opportunity'
     | '/'
     | '/shops/$shopId'
     | '/shops'
@@ -168,12 +192,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/costs'
     | '/_authenticated/deliveries'
+    | '/_authenticated/delivery-sheet'
     | '/_authenticated/import'
     | '/_authenticated/labels'
     | '/_authenticated/orders'
     | '/_authenticated/payments'
     | '/_authenticated/reports'
     | '/_authenticated/settings'
+    | '/_authenticated/sku-opportunity'
     | '/_authenticated/'
     | '/_authenticated/shops/$shopId'
     | '/_authenticated/shops/'
@@ -221,6 +247,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDeliveriesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/delivery-sheet': {
+      id: '/_authenticated/delivery-sheet'
+      path: '/delivery-sheet'
+      fullPath: '/delivery-sheet'
+      preLoaderRoute: typeof AuthenticatedDeliverySheetRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/import': {
       id: '/_authenticated/import'
       path: '/import'
@@ -263,6 +296,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/sku-opportunity': {
+      id: '/_authenticated/sku-opportunity'
+      path: '/sku-opportunity'
+      fullPath: '/sku-opportunity'
+      preLoaderRoute: typeof AuthenticatedSkuOpportunityRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/shops/': {
       id: '/_authenticated/shops/'
       path: '/shops'
@@ -283,12 +323,14 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedCostsRoute: typeof AuthenticatedCostsRoute
   AuthenticatedDeliveriesRoute: typeof AuthenticatedDeliveriesRoute
+  AuthenticatedDeliverySheetRoute: typeof AuthenticatedDeliverySheetRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedOrdersRoute: typeof AuthenticatedOrdersRoute
   AuthenticatedPaymentsRoute: typeof AuthenticatedPaymentsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSkuOpportunityRoute: typeof AuthenticatedSkuOpportunityRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedShopsShopIdRoute: typeof AuthenticatedShopsShopIdRoute
   AuthenticatedShopsIndexRoute: typeof AuthenticatedShopsIndexRoute
@@ -297,12 +339,14 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCostsRoute: AuthenticatedCostsRoute,
   AuthenticatedDeliveriesRoute: AuthenticatedDeliveriesRoute,
+  AuthenticatedDeliverySheetRoute: AuthenticatedDeliverySheetRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
   AuthenticatedOrdersRoute: AuthenticatedOrdersRoute,
   AuthenticatedPaymentsRoute: AuthenticatedPaymentsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSkuOpportunityRoute: AuthenticatedSkuOpportunityRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedShopsShopIdRoute: AuthenticatedShopsShopIdRoute,
   AuthenticatedShopsIndexRoute: AuthenticatedShopsIndexRoute,

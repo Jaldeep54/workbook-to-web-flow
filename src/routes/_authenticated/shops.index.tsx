@@ -5,15 +5,16 @@ import { Download, Plus, Search, Store } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { ProductMultiSelect } from "@/components/product-multi-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { shopsQuery } from "@/lib/queries";
+import { fetchNextShopCode, productsQuery, shopProductsQuery, shopsQuery } from "@/lib/queries";
 import { downloadCsv } from "@/lib/export";
 import { dateLabel } from "@/lib/format";
 import type { Shop } from "@/lib/domain";
@@ -46,10 +47,21 @@ const emptyShop = {
 function ShopsPage() {
   const qc = useQueryClient();
   const { data: shops = [], isLoading } = useQuery(shopsQuery);
+  const { data: products = [] } = useQuery(productsQuery);
+  const { data: shopProducts = [] } = useQuery(shopProductsQuery);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Shop | null>(null);
   const [form, setForm] = useState({ ...emptyShop });
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+
+  const productsByShop = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const link of shopProducts) {
+      map.set(link.shop_id, [...(map.get(link.shop_id) ?? []), link.product_id]);
+    }
+    return map;
+  }, [shopProducts]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -63,29 +75,79 @@ function ShopsPage() {
 
   const save = useMutation({
     mutationFn: async () => {
+      if (!form.shop_name.trim()) throw new Error("Shop name is required");
+      if (selectedProducts.length === 0) throw new Error("Select at least one product for this shop");
+
       const payload = {
         ...form,
+        code: form.code.trim(),
+        shop_name: form.shop_name.trim(),
         joined_on: form.joined_on || null,
         design_type: Number(form.design_type) || 1,
       };
-      const { error } = editing
-        ? await supabase.from("shops").update(payload).eq("id", editing.id)
-        : await supabase.from("shops").insert(payload);
-      if (error) throw new Error(error.message);
+
+      let shopId = editing?.id;
+      if (editing) {
+        const { error } = await supabase.from("shops").update(payload).eq("id", editing.id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { data, error } = await supabase.from("shops").insert(payload).select("id").single();
+        if (error) throw new Error(error.message);
+        shopId = (data as { id: string }).id;
+      }
+      if (!shopId) throw new Error("Shop could not be saved");
+
+      const existing = productsByShop.get(shopId) ?? [];
+      const toAdd = selectedProducts.filter((id) => !existing.includes(id));
+      const toRemove = existing.filter((id) => !selectedProducts.includes(id));
+
+      if (toAdd.length) {
+        const { error } = await supabase
+          .from("shop_products" as never)
+          .insert(toAdd.map((product_id) => ({ shop_id: shopId, product_id })) as never);
+        if (error) throw new Error(error.message);
+      }
+      if (toRemove.length) {
+        const { error } = await supabase
+          .from("shop_products" as never)
+          .delete()
+          .eq("shop_id", shopId)
+          .in("product_id", toRemove);
+        if (error) throw new Error(error.message);
+      }
     },
     onSuccess: () => {
       toast.success(editing ? "Shop updated" : "Shop added");
       setOpen(false);
       setEditing(null);
       setForm({ ...emptyShop });
+      setSelectedProducts([]);
       void qc.invalidateQueries({ queryKey: ["shops"] });
+      void qc.invalidateQueries({ queryKey: ["shop_products"] });
+      void qc.invalidateQueries({ queryKey: ["sku_opportunity"] });
+      void qc.invalidateQueries({ queryKey: ["label_stock"] });
       void qc.invalidateQueries({ queryKey: ["label_stock_summary"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
+  /** New shops get the next sequential code automatically. */
+  const openCreate = async () => {
+    setEditing(null);
+    setSelectedProducts([]);
+    setForm({ ...emptyShop });
+    setOpen(true);
+    try {
+      const code = await fetchNextShopCode();
+      setForm((f) => ({ ...f, code }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not generate a shop code");
+    }
+  };
+
   const openEdit = (shop: Shop) => {
     setEditing(shop);
+    setSelectedProducts(productsByShop.get(shop.id) ?? []);
     setForm({
       code: shop.code,
       folder_name: shop.folder_name ?? "",
@@ -136,20 +198,22 @@ function ShopsPage() {
                 if (!o) {
                   setEditing(null);
                   setForm({ ...emptyShop });
+                  setSelectedProducts([]);
                 }
               }}
             >
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="size-4" /> New shop
-                </Button>
-              </DialogTrigger>
+              <Button onClick={() => void openCreate()}>
+                <Plus className="size-4" /> New shop
+              </Button>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle>{editing ? "Edit shop" : "New shop"}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Shop code" value={form.code} onChange={(v) => setForm({ ...form, code: v })} />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Shop code (auto)</Label>
+                    <Input value={form.code} readOnly className="num bg-muted/60" />
+                  </div>
                   <Field label="Folder name" value={form.folder_name} onChange={(v) => setForm({ ...form, folder_name: v })} />
                   <div className="sm:col-span-2">
                     <Field label="Shop name" value={form.shop_name} onChange={(v) => setForm({ ...form, shop_name: v })} />
@@ -180,9 +244,20 @@ function ShopsPage() {
                   <div className="sm:col-span-2">
                     <Field label="Address" value={form.address} onChange={(v) => setForm({ ...form, address: v })} />
                   </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs">Products this shop works with</Label>
+                    <ProductMultiSelect
+                      products={products}
+                      selected={selectedProducts}
+                      onChange={setSelectedProducts}
+                    />
+                  </div>
                 </div>
                 <DialogFooter>
-                  <Button onClick={() => save.mutate()} disabled={!form.code || !form.shop_name || save.isPending}>
+                  <Button
+                    onClick={() => save.mutate()}
+                    disabled={!form.code || !form.shop_name || selectedProducts.length === 0 || save.isPending}
+                  >
                     Save shop
                   </Button>
                 </DialogFooter>

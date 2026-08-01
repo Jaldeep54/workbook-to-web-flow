@@ -81,6 +81,7 @@ export type LabelStockRow = {
   low_stock_threshold: number;
   stock: number;
   is_low: boolean;
+  shop_sells_product: boolean;
 };
 
 export const labelStockQuery = queryOptions({
@@ -129,3 +130,66 @@ export const invalidateKeys = [
   ["variable_costs"],
   ["shops"],
 ];
+
+/** Which of the six products each shop works with. */
+export type ShopProduct = { shop_id: string; product_id: string };
+
+export const shopProductsQuery = queryOptions({
+  queryKey: ["shop_products"],
+  staleTime: 60 * 1000,
+  queryFn: async () => {
+    const { data, error } = await supabase.from("shop_products" as never).select("shop_id, product_id");
+    if (error) throw new Error(error.message);
+    return (data ?? []) as unknown as ShopProduct[];
+  },
+});
+
+export type SkuOpportunityRow = {
+  shop_id: string;
+  shop_name: string;
+  label_name: string | null;
+  address: string | null;
+  is_active: boolean;
+  active_products: string[] | null;
+  inactive_products: string[] | null;
+  avg_monthly_sales: number;
+  total_sales: number;
+  active_months: number;
+};
+
+export const skuOpportunityQuery = queryOptions({
+  queryKey: ["sku_opportunity"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("shop_sku_opportunity" as never)
+      .select("*")
+      .order("shop_name");
+    if (error) throw new Error(error.message);
+    return (data ?? []) as unknown as SkuOpportunityRow[];
+  },
+});
+
+export type ProductQtyRow = {
+  product_id: string;
+  product_key: string;
+  short_name: string;
+  sort_order: number;
+  total_qty: number;
+};
+
+/** Lifetime ordered quantity per product, across every shop. */
+export const orderQtyByProductQuery = queryOptions({
+  queryKey: ["order_qty_by_product"],
+  queryFn: async () => {
+    const { data, error } = await supabase.rpc("order_qty_by_product" as never);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as unknown as ProductQtyRow[];
+  },
+});
+
+/** Sequential shop code, based on the number of shops on file. */
+export async function fetchNextShopCode(): Promise<string> {
+  const { data, error } = await supabase.rpc("next_shop_code" as never);
+  if (error) throw new Error(error.message);
+  return String(data ?? 1);
+}

@@ -13,7 +13,7 @@ export function ShopFilter({ value, onChange }: { value: string; onChange: (v: s
         <SelectItem value="all">All shops</SelectItem>
         {shops.map((s) => (
           <SelectItem key={s.id} value={s.id}>
-            {s.shop_name}
+            {shopLabel(s.shop_name, s.label_name)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -39,10 +39,15 @@ export function ShopSelect({
       <SelectContent>
         {shops.map((s) => (
           <SelectItem key={s.id} value={s.id}>
-            {s.shop_name}
+            {shopLabel(s.shop_name, s.label_name)}
           </SelectItem>
         ))}
       </SelectContent>
     </Select>
   );
+}
+
+/** Shops are always listed with their label name, as on the printed sheets. */
+export function shopLabel(shopName: string, labelName?: string | null) {
+  return labelName && labelName !== shopName ? `${shopName} · ${labelName}` : shopName;
 }

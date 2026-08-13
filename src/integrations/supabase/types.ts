@@ -609,6 +609,8 @@ export type Database = {
           is_active: boolean
           joined_on: string | null
           label_name: string | null
+          latitude: number | null
+          longitude: number | null
           mobile: string | null
           shop_name: string
           updated_at: string
@@ -624,6 +626,8 @@ export type Database = {
           is_active?: boolean
           joined_on?: string | null
           label_name?: string | null
+          latitude?: number | null
+          longitude?: number | null
           mobile?: string | null
           shop_name: string
           updated_at?: string
@@ -639,6 +643,8 @@ export type Database = {
           is_active?: boolean
           joined_on?: string | null
           label_name?: string | null
+          latitude?: number | null
+          longitude?: number | null
           mobile?: string | null
           shop_name?: string
           updated_at?: string

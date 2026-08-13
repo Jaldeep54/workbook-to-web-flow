@@ -5,6 +5,7 @@ import { Download, Plus, Search, Store } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { LocationPicker } from "@/components/location-picker";
 import { ProductMultiSelect } from "@/components/product-multi-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,8 @@ const emptyShop = {
   label_name: "",
   design_type: 1,
   address: "",
+  latitude: null as number | null,
+  longitude: null as number | null,
   mobile: "",
   handled_by: "",
   joined_on: "",
@@ -155,6 +158,8 @@ function ShopsPage() {
       label_name: shop.label_name ?? "",
       design_type: shop.design_type,
       address: shop.address ?? "",
+      latitude: shop.latitude,
+      longitude: shop.longitude,
       mobile: shop.mobile ?? "",
       handled_by: shop.handled_by ?? "",
       joined_on: shop.joined_on ?? "",
@@ -243,6 +248,21 @@ function ShopsPage() {
                   </div>
                   <div className="sm:col-span-2">
                     <Field label="Address" value={form.address} onChange={(v) => setForm({ ...form, address: v })} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <LocationPicker
+                      address={form.address}
+                      latitude={form.latitude}
+                      longitude={form.longitude}
+                      onLocationChange={(loc) =>
+                        setForm({
+                          ...form,
+                          latitude: loc.latitude,
+                          longitude: loc.longitude,
+                          address: loc.address ?? form.address,
+                        })
+                      }
+                    />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label className="text-xs">Products this shop works with</Label>

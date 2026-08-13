@@ -14,6 +14,7 @@ import {
   CalendarDays,
   Lightbulb,
   Menu,
+  MapPin,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
   { to: "/shops", label: "Shops", icon: Store },
+  { to: "/shops/map", label: "Shops on Map", icon: MapPin },
   { to: "/sku-opportunity", label: "SKU opportunity", icon: Lightbulb },
   { to: "/orders", label: "Orders", icon: ClipboardList },
   { to: "/delivery-sheet", label: "Delivery sheet", icon: CalendarDays },
@@ -42,7 +44,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="flex flex-col gap-1">
       {NAV.map((item) => {
-        const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+        const active =
+          item.to === "/"
+            ? pathname === "/"
+            : item.to === "/shops"
+              ? pathname === "/shops" || (pathname.startsWith("/shops/") && !pathname.startsWith("/shops/map"))
+              : pathname.startsWith(item.to);
         return (
           <Link
             key={item.to}

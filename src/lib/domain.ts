@@ -45,6 +45,8 @@ export type Shop = {
   label_name: string | null;
   design_type: number;
   address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   mobile: string | null;
   handled_by: string | null;
   joined_on: string | null;

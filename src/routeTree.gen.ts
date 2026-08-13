@@ -24,6 +24,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedSkuOpportunityRouteImport } from './routes/_authenticated/sku-opportunity'
 import { Route as AuthenticatedShopsIndexRouteImport } from './routes/_authenticated/shops.index'
 import { Route as AuthenticatedShopsShopIdRouteImport } from './routes/_authenticated/shops.$shopId'
+import { Route as AuthenticatedShopsMapRouteImport } from './routes/_authenticated/shops.map'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -102,6 +103,11 @@ const AuthenticatedShopsShopIdRoute =
     path: '/shops/$shopId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedShopsMapRoute = AuthenticatedShopsMapRouteImport.update({
+  id: '/shops/map',
+  path: '/shops/map',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/sku-opportunity': typeof AuthenticatedSkuOpportunityRoute
   '/shops/$shopId': typeof AuthenticatedShopsShopIdRoute
+  '/shops/map': typeof AuthenticatedShopsMapRoute
   '/shops/': typeof AuthenticatedShopsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/sku-opportunity': typeof AuthenticatedSkuOpportunityRoute
   '/': typeof AuthenticatedIndexRoute
   '/shops/$shopId': typeof AuthenticatedShopsShopIdRoute
+  '/shops/map': typeof AuthenticatedShopsMapRoute
   '/shops': typeof AuthenticatedShopsIndexRoute
 }
 export interface FileRoutesById {
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/_authenticated/sku-opportunity': typeof AuthenticatedSkuOpportunityRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/shops/$shopId': typeof AuthenticatedShopsShopIdRoute
+  '/_authenticated/shops/map': typeof AuthenticatedShopsMapRoute
   '/_authenticated/shops/': typeof AuthenticatedShopsIndexRoute
 }
 export interface FileRouteTypes {
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sku-opportunity'
     | '/shops/$shopId'
+    | '/shops/map'
     | '/shops/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/sku-opportunity'
     | '/'
     | '/shops/$shopId'
+    | '/shops/map'
     | '/shops'
   id:
     | '__root__'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/_authenticated/sku-opportunity'
     | '/_authenticated/'
     | '/_authenticated/shops/$shopId'
+    | '/_authenticated/shops/map'
     | '/_authenticated/shops/'
   fileRoutesById: FileRoutesById
 }
@@ -317,6 +329,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedShopsShopIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/shops/map': {
+      id: '/_authenticated/shops/map'
+      path: '/shops/map'
+      fullPath: '/shops/map'
+      preLoaderRoute: typeof AuthenticatedShopsMapRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -333,6 +352,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSkuOpportunityRoute: typeof AuthenticatedSkuOpportunityRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedShopsShopIdRoute: typeof AuthenticatedShopsShopIdRoute
+  AuthenticatedShopsMapRoute: typeof AuthenticatedShopsMapRoute
   AuthenticatedShopsIndexRoute: typeof AuthenticatedShopsIndexRoute
 }
 
@@ -349,6 +369,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSkuOpportunityRoute: AuthenticatedSkuOpportunityRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedShopsShopIdRoute: AuthenticatedShopsShopIdRoute,
+  AuthenticatedShopsMapRoute: AuthenticatedShopsMapRoute,
   AuthenticatedShopsIndexRoute: AuthenticatedShopsIndexRoute,
 }
 

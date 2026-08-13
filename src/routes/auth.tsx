@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Loader2, Sparkles } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,15 +67,15 @@ function AuthPage() {
 
   const google = async () => {
     setBusy(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}${target}` },
     });
-    if (result.error) {
+    if (error) {
       setBusy(false);
       return toast.error("Google sign-in failed");
     }
-    if (result.redirected) return;
-    setBusy(false);
+    // On success the browser is redirected to Google, so no need to reset `busy` here.
   };
 
   return (

@@ -1,47 +1,65 @@
 /**
- * Free, keyless location helpers: OpenStreetMap's Nominatim for address
- * search, and the browser's native Geolocation API for "use my location."
+ * Location helpers backed by Google Maps Platform: the (new) Places API for
+ * address search suggestions, the Geocoding API for reverse geocoding, and
+ * the browser's native Geolocation API for "use my location."
  */
+import { loadGeocodingLibrary, loadPlacesLibrary } from "./google-maps-loader";
 
-export type GeocodeResult = {
-  displayName: string;
-  latitude: number;
-  longitude: number;
+export type PlaceSuggestion = {
+  id: string;
+  text: string;
+  prediction: google.maps.places.PlacePrediction;
 };
 
-/** Address search via Nominatim. One request per explicit user action — never call this on every keystroke. */
-export async function searchAddress(query: string): Promise<GeocodeResult[]> {
-  const q = query.trim();
-  if (!q) return [];
+export async function createAutocompleteSession(): Promise<google.maps.places.AutocompleteSessionToken> {
+  const { AutocompleteSessionToken } = await loadPlacesLibrary();
+  return new AutocompleteSessionToken();
+}
 
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", q);
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("limit", "5");
+/** Live search-as-you-type suggestions via Places Autocomplete (New). */
+export async function fetchPlaceSuggestions(
+  query: string,
+  sessionToken: google.maps.places.AutocompleteSessionToken,
+): Promise<PlaceSuggestion[]> {
+  const input = query.trim();
+  if (!input) return [];
 
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error("Address search failed");
+  const { AutocompleteSuggestion } = await loadPlacesLibrary();
+  const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+    input,
+    sessionToken,
+  });
 
-  const data = (await res.json()) as Array<{ display_name: string; lat: string; lon: string }>;
-  return data.map((r) => ({
-    displayName: r.display_name,
-    latitude: Number(r.lat),
-    longitude: Number(r.lon),
-  }));
+  return suggestions
+    .filter((s) => s.placePrediction != null)
+    .map((s) => {
+      const prediction = s.placePrediction!;
+      return { id: prediction.placeId, text: prediction.text.toString(), prediction };
+    });
+}
+
+/** Resolves a chosen suggestion into coordinates + a formatted address. */
+export async function resolvePlace(
+  prediction: google.maps.places.PlacePrediction,
+): Promise<{ latitude: number; longitude: number; address: string }> {
+  const place = prediction.toPlace();
+  const { place: full } = await place.fetchFields({ fields: ["location", "formattedAddress"] });
+  if (!full.location) throw new Error("This place has no location data");
+  return {
+    latitude: full.location.lat(),
+    longitude: full.location.lng(),
+    address: full.formattedAddress ?? prediction.text.toString(),
+  };
 }
 
 /** Best-effort address label for a coordinate pair (e.g. after "use current location"). */
 export async function reverseGeocode(latitude: number, longitude: number): Promise<string | null> {
-  const url = new URL("https://nominatim.openstreetmap.org/reverse");
-  url.searchParams.set("lat", String(latitude));
-  url.searchParams.set("lon", String(longitude));
-  url.searchParams.set("format", "jsonv2");
-
   try {
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { display_name?: string };
-    return data.display_name ?? null;
+    const { Geocoder } = await loadGeocodingLibrary();
+    const { results } = await new Geocoder().geocode({
+      location: { lat: latitude, lng: longitude },
+    });
+    return results[0]?.formatted_address ?? null;
   } catch {
     return null;
   }

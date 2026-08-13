@@ -34,3 +34,12 @@ project).
 See `.env.example` for the full list. `VITE_`-prefixed variables are exposed to
 the browser bundle; `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never
 be exposed to the client.
+
+## Google Maps
+
+The shop location picker and "Shops on Map" page use Google Maps Platform
+(Maps JavaScript API, Places API, Geocoding API). Set `VITE_GOOGLE_MAPS_API_KEY`
+locally and in Vercel. Restrict the key in Google Cloud Console to HTTP
+referrers for this app's domain(s) and to the three APIs above — see the key's
+"API restrictions" and "Application restrictions" settings under
+**APIs & Services → Credentials**.

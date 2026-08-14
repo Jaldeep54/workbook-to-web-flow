@@ -1,18 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
 import { MonthPicker } from "@/components/month-picker";
-import { ShopFilter } from "@/components/filter-bar";
+import { ShopAreaFilter, ShopFilter } from "@/components/filter-bar";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
+import { shopsQuery } from "@/lib/queries";
 import { paymentsQuery, type PaymentRecord } from "@/lib/records";
 import { PAYMENT_STATUSES, currentMonth, monthLabel } from "@/lib/domain";
 import { dateLabel, inr } from "@/lib/format";
@@ -24,10 +38,14 @@ export const Route = createFileRoute("/_authenticated/payments")({
       { title: "Payments — Klinzo Operations" },
       {
         name: "description",
-        content: "Payments raised automatically from delivered orders, with received and pending collections per month.",
+        content:
+          "Payments raised automatically from delivered orders, with received and pending collections per month.",
       },
       { property: "og:title", content: "Payments — Klinzo Operations" },
-      { property: "og:description", content: "Collections and outstanding balances by shop and month." },
+      {
+        property: "og:description",
+        content: "Collections and outstanding balances by shop and month.",
+      },
     ],
   }),
   component: PaymentsPage,
@@ -37,7 +55,15 @@ function PaymentsPage() {
   const qc = useQueryClient();
   const [month, setMonth] = useState(currentMonth());
   const [shopFilter, setShopFilter] = useState("all");
-  const { data: payments = [], isLoading } = useQuery(paymentsQuery(month, shopFilter));
+  const [areaFilter, setAreaFilter] = useState("all");
+  const { data: shops = [] } = useQuery(shopsQuery);
+  const { data: allPayments = [], isLoading } = useQuery(paymentsQuery(month, shopFilter));
+
+  const payments = useMemo(() => {
+    if (areaFilter === "all") return allPayments;
+    const shopIdsInArea = new Set(shops.filter((s) => s.area_id === areaFilter).map((s) => s.id));
+    return allPayments.filter((p) => shopIdsInArea.has(p.shop_id));
+  }, [allPayments, shops, areaFilter]);
 
   const update = useMutation({
     mutationFn: async ({
@@ -72,6 +98,7 @@ function PaymentsPage() {
         actions={
           <>
             <MonthPicker value={month} onChange={setMonth} />
+            <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
             <ShopFilter value={shopFilter} onChange={setShopFilter} />
             <Button
               variant="outline"
@@ -134,7 +161,8 @@ function PaymentsPage() {
             {!isLoading && payments.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
-                  No payments in {monthLabel(month)}. Mark orders delivered on the delivery sheet to raise payments.
+                  No payments in {monthLabel(month)}. Mark orders delivered on the delivery sheet to
+                  raise payments.
                 </TableCell>
               </TableRow>
             )}
@@ -143,7 +171,9 @@ function PaymentsPage() {
                 <TableCell>{dateLabel(p.payment_date)}</TableCell>
                 <TableCell className="font-medium">
                   {p.shops?.shop_name ?? "—"}
-                  {p.shops?.label_name && <p className="text-xs text-muted-foreground">{p.shops.label_name}</p>}
+                  {p.shops?.label_name && (
+                    <p className="text-xs text-muted-foreground">{p.shops.label_name}</p>
+                  )}
                 </TableCell>
                 <TableCell className="num text-right">{p.orders?.order_no ?? "—"}</TableCell>
                 <TableCell className="num text-right font-semibold">{inr(p.amount)}</TableCell>

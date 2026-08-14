@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { shopsQuery } from "@/lib/queries";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { shopAreasQuery, shopsQuery } from "@/lib/queries";
 
 export function ShopFilter({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { data: shops = [] } = useQuery(shopsQuery);
@@ -50,4 +56,34 @@ export function ShopSelect({
 /** Shops are always listed with their label name, as on the printed sheets. */
 export function shopLabel(shopName: string, labelName?: string | null) {
   return labelName && labelName !== shopName ? `${shopName} · ${labelName}` : shopName;
+}
+
+/**
+ * Shared "Shop Area" filter — same "All Areas" + area list everywhere
+ * (Shops Map, SKU Opportunity, Orders, Delivery Sheet, Deliveries, Payments)
+ * so every page reads areas from the same shopAreasQuery.
+ */
+export function ShopAreaFilter({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const { data: areas = [] } = useQuery(shopAreasQuery);
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-[180px] bg-card">
+        <SelectValue placeholder="All areas" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">All areas</SelectItem>
+        {areas.map((a) => (
+          <SelectItem key={a.id} value={a.id}>
+            {a.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }

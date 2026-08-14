@@ -6,18 +6,38 @@ import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
 import { MonthPicker } from "@/components/month-picker";
-import { ShopFilter } from "@/components/filter-bar";
+import { ShopAreaFilter, ShopFilter } from "@/components/filter-bar";
 import { ProductQtyGrid } from "@/components/product-qty-grid";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { productsQuery } from "@/lib/queries";
+import { productsQuery, shopsQuery } from "@/lib/queries";
 import { deliveriesQuery } from "@/lib/records";
 import {
   DELIVERY_STATUSES,
@@ -36,10 +56,14 @@ export const Route = createFileRoute("/_authenticated/deliveries")({
       { title: "Deliveries — Klinzo Operations" },
       {
         name: "description",
-        content: "Deliveries with sales, labelling, jar & can, production cost and profit calculated automatically.",
+        content:
+          "Deliveries with sales, labelling, jar & can, production cost and profit calculated automatically.",
       },
       { property: "og:title", content: "Deliveries — Klinzo Operations" },
-      { property: "og:description", content: "Delivery sheet with live profit and cost calculations." },
+      {
+        property: "og:description",
+        content: "Delivery sheet with live profit and cost calculations.",
+      },
     ],
   }),
   component: DeliveriesPage,
@@ -59,6 +83,7 @@ function DeliveriesPage() {
   const qc = useQueryClient();
   const [month, setMonth] = useState(currentMonth());
   const [shopFilter, setShopFilter] = useState("all");
+  const [areaFilter, setAreaFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [orderId, setOrderId] = useState("");
   const [deliveryDate, setDeliveryDate] = useState(todayISO());
@@ -66,18 +91,29 @@ function DeliveriesPage() {
   const [qty, setQty] = useState<QtyMap>({});
 
   const { data: products = [] } = useQuery(productsQuery);
-  const { data: deliveries = [], isLoading } = useQuery(deliveriesQuery(month, shopFilter));
+  const { data: shops = [] } = useQuery(shopsQuery);
+  const { data: allDeliveries = [], isLoading } = useQuery(deliveriesQuery(month, shopFilter));
+
+  const deliveries = useMemo(() => {
+    if (areaFilter === "all") return allDeliveries;
+    const shopIdsInArea = new Set(shops.filter((s) => s.area_id === areaFilter).map((s) => s.id));
+    return allDeliveries.filter((d) => shopIdsInArea.has(d.shop_id));
+  }, [allDeliveries, shops, areaFilter]);
 
   const pending = useQuery({
     queryKey: ["pending_orders"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, shop_id, order_no, order_date, shops(shop_name), order_lines(product_id, qty), deliveries(id)")
+        .select(
+          "id, shop_id, order_no, order_date, shops(shop_name), order_lines(product_id, qty), deliveries(id)",
+        )
         .order("order_date", { ascending: false })
         .limit(500);
       if (error) throw new Error(error.message);
-      return ((data ?? []) as unknown as PendingOrder[]).filter((o) => (o.deliveries ?? []).length === 0);
+      return ((data ?? []) as unknown as PendingOrder[]).filter(
+        (o) => (o.deliveries ?? []).length === 0,
+      );
     },
   });
 
@@ -118,7 +154,11 @@ function DeliveriesPage() {
 
       const lines = products
         .filter((p) => (qty[p.id] ?? 0) > 0)
-        .map((p) => ({ delivery_id: (data as { id: string }).id, product_id: p.id, qty: qty[p.id] }));
+        .map((p) => ({
+          delivery_id: (data as { id: string }).id,
+          product_id: p.id,
+          qty: qty[p.id],
+        }));
       if (lines.length) {
         const { error: lineError } = await supabase.from("delivery_lines").insert(lines);
         if (lineError) throw new Error(lineError.message);
@@ -150,6 +190,7 @@ function DeliveriesPage() {
         actions={
           <>
             <MonthPicker value={month} onChange={setMonth} />
+            <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
             <ShopFilter value={shopFilter} onChange={setShopFilter} />
             <Button
               variant="outline"
@@ -202,7 +243,11 @@ function DeliveriesPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Delivery date</Label>
-                    <Input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+                    <Input
+                      type="date"
+                      value={deliveryDate}
+                      onChange={(e) => setDeliveryDate(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label className="text-xs">Status</Label>
@@ -248,7 +293,11 @@ function DeliveriesPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Sales this month" value={inr(totalSales)} tone="accent" />
         <StatCard label="Fixed cost" value={inr(totalCost)} />
-        <StatCard label="Profit" value={inr(totalProfit)} tone={totalProfit >= 0 ? "positive" : "negative"} />
+        <StatCard
+          label="Profit"
+          value={inr(totalProfit)}
+          tone={totalProfit >= 0 ? "positive" : "negative"}
+        />
       </div>
 
       <div className="surface-card overflow-x-auto">
@@ -286,7 +335,9 @@ function DeliveriesPage() {
                 <TableCell>{dateLabel(d.delivery_date)}</TableCell>
                 <TableCell className="font-medium">{d.shops?.shop_name ?? "—"}</TableCell>
                 <TableCell>
-                  <Badge variant={d.status === "Delivered" ? "default" : "secondary"}>{d.status ?? "—"}</Badge>
+                  <Badge variant={d.status === "Delivered" ? "default" : "secondary"}>
+                    {d.status ?? "—"}
+                  </Badge>
                 </TableCell>
                 <TableCell className="num text-right">{num(d.total_qty)}</TableCell>
                 <TableCell className="num text-right">{inr(d.total_sales)}</TableCell>

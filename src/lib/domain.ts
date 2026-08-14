@@ -44,6 +44,8 @@ export type Shop = {
   shop_name: string;
   label_name: string | null;
   design_type: number;
+  area_id: string | null;
+  image_path: string | null;
   address: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -52,6 +54,24 @@ export type Shop = {
   joined_on: string | null;
   is_active: boolean;
 };
+
+export type ShopArea = {
+  id: string;
+  name: string;
+};
+
+/** Design types map to a fixed marker color everywhere a shop appears on a map. */
+export const DESIGN_TYPE_COLORS: Record<number, string> = {
+  1: "#f97316", // orange
+  2: "#22c55e", // green
+  3: "#3b82f6", // blue
+  4: "#ec4899", // pink
+};
+export const DEFAULT_DESIGN_TYPE_COLOR = "#6b7280"; // gray, for any other/unexpected design type
+
+export function designTypeColor(designType: number): string {
+  return DESIGN_TYPE_COLORS[designType] ?? DEFAULT_DESIGN_TYPE_COLOR;
+}
 
 export type QtyMap = Record<string, number>;
 
@@ -108,6 +128,11 @@ export function computeDeliveryTotals(
 /** Labels produced from a number of printed sheets. */
 export function labelsFromSheets(sheets: number, labelsPerSheet: number): number {
   return round2((Number(sheets) || 0) * (Number(labelsPerSheet) || 0));
+}
+
+/** Universal Google Maps directions link — works cross-platform, deep-links into the app on mobile. */
+export function googleMapsDirectionsUrl(latitude: number, longitude: number): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
 }
 
 export const DELIVERY_STATUSES = ["Pending", "Delivered", "Cancelled"] as const;

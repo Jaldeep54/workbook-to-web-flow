@@ -7,16 +7,26 @@ import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { labelProductsQuery, labelStockQuery, shopsQuery } from "@/lib/queries";
+import { labelProductsQuery, labelStockQuery, shopAreasQuery, shopsQuery } from "@/lib/queries";
 import { dateLabel, inr, num } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/shops/$shopId")({
   head: () => ({
     meta: [
       { title: "Shop detail — Klinzo Operations" },
-      { name: "description", content: "Orders, deliveries, payments and label stock history for a single shop." },
+      {
+        name: "description",
+        content: "Orders, deliveries, payments and label stock history for a single shop.",
+      },
       { property: "og:title", content: "Shop detail — Klinzo Operations" },
       { property: "og:description", content: "One shop's full trading history." },
     ],
@@ -28,6 +38,8 @@ function ShopDetail() {
   const { shopId } = useParams({ from: "/_authenticated/shops/$shopId" });
   const { data: shops = [] } = useQuery(shopsQuery);
   const shop = shops.find((s) => s.id === shopId);
+  const { data: areas = [] } = useQuery(shopAreasQuery);
+  const areaName = areas.find((a) => a.id === shop?.area_id)?.name ?? "Not Assigned";
   const { data: labelProducts = [] } = useQuery(labelProductsQuery);
   const { data: stock = [] } = useQuery(labelStockQuery);
 
@@ -58,7 +70,12 @@ function ShopDetail() {
       if (deliveries.error) throw new Error(deliveries.error.message);
       if (payments.error) throw new Error(payments.error.message);
       return {
-        orders: (orders.data ?? []) as Array<{ id: string; order_no: number; order_date: string | null; total_qty: number }>,
+        orders: (orders.data ?? []) as Array<{
+          id: string;
+          order_no: number;
+          order_date: string | null;
+          total_qty: number;
+        }>,
         deliveries: (deliveries.data ?? []) as Array<{
           id: string;
           delivery_date: string | null;
@@ -94,13 +111,17 @@ function ShopDetail() {
 
       <PageHeader
         title={shop?.shop_name ?? "Shop"}
-        description={[shop?.code, shop?.mobile, shop?.address].filter(Boolean).join(" · ")}
+        description={[areaName, shop?.mobile, shop?.address].filter(Boolean).join(" · ")}
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <StatCard label="Lifetime sales" value={inr(sales)} tone="accent" />
         <StatCard label="Collected" value={inr(received)} tone="positive" />
-        <StatCard label="Outstanding" value={inr(sales - received)} tone={sales - received > 0 ? "negative" : "positive"} />
+        <StatCard
+          label="Outstanding"
+          value={inr(sales - received)}
+          tone={sales - received > 0 ? "negative" : "positive"}
+        />
         <StatCard label="Profit" value={inr(profit)} tone={profit >= 0 ? "positive" : "negative"} />
       </div>
 
@@ -160,7 +181,9 @@ function ShopDetail() {
                   <TableRow key={d.id}>
                     <TableCell>{dateLabel(d.delivery_date)}</TableCell>
                     <TableCell>
-                      <Badge variant={d.status === "Delivered" ? "default" : "secondary"}>{d.status ?? "—"}</Badge>
+                      <Badge variant={d.status === "Delivered" ? "default" : "secondary"}>
+                        {d.status ?? "—"}
+                      </Badge>
                     </TableCell>
                     <TableCell className="num text-right">{num(d.total_qty)}</TableCell>
                     <TableCell className="num text-right">{inr(d.total_sales)}</TableCell>
@@ -234,7 +257,9 @@ function ShopDetail() {
                       >
                         {num(value)}
                       </TableCell>
-                      <TableCell className="num text-right text-muted-foreground">{lp.low_stock_threshold}</TableCell>
+                      <TableCell className="num text-right text-muted-foreground">
+                        {lp.low_stock_threshold}
+                      </TableCell>
                     </TableRow>
                   );
                 })}

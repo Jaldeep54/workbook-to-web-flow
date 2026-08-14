@@ -21,9 +21,12 @@ const PIN_GLYPH_SIZE = 24;
 const PIN_PADDING = 3;
 const PIN_BOX = PIN_GLYPH_SIZE + PIN_PADDING * 2;
 const LABEL_GAP = 4;
-const LABEL_HEIGHT = 18;
-const LABEL_PAD_X = 6;
-const LABEL_FONT = "600 12px ui-sans-serif, system-ui, sans-serif";
+const LABEL_HEIGHT = 20;
+const LABEL_PAD_X = 8;
+const LABEL_RADIUS = 4;
+const LABEL_BG = "#1d4ed8"; // solid blue — always this colour, regardless of Design Type
+const LABEL_TEXT_COLOR = "#ffffff";
+const LABEL_FONT = "700 12px ui-sans-serif, system-ui, sans-serif";
 const MAX_LABEL_CHARS = 22;
 
 let measureCtx: CanvasRenderingContext2D | null | undefined;
@@ -54,9 +57,10 @@ function escapeXml(text: string): string {
 
 /**
  * Builds a single combined icon: a coloured location pin (per Design Type)
- * with the shop name in a small pill beside it. Rendered as one SVG data URI
- * so it's a normal Google Maps marker icon — no extra overlays, no static
- * HTML outside the map, and it pans/zooms with the map like any other marker.
+ * with the shop name in a solid blue label box beside it. Rendered as one SVG
+ * data URI so it's a normal Google Maps marker icon — no extra overlays, no
+ * static HTML outside the map, and it pans/zooms with the map like any other
+ * marker.
  */
 function buildPinIcon(
   shop: ShopWithLocation,
@@ -78,8 +82,8 @@ function buildPinIcon(
     <path d="M12 0C7.03 0 3 4.03 3 9c0 6.75 9 15 9 15s9-8.25 9-15c0-4.97-4.03-9-9-9z" fill="${color}" stroke="#ffffff" stroke-width="1.5"/>
     <circle cx="12" cy="9" r="3.4" fill="#ffffff"/>
   </g>
-  <rect x="${pillX}" y="${pillY}" width="${pillWidth}" height="${LABEL_HEIGHT}" rx="${LABEL_HEIGHT / 2}" fill="#ffffff" fill-opacity="0.95" stroke="${color}" stroke-width="1"/>
-  <text x="${pillX + LABEL_PAD_X}" y="${pillY + LABEL_HEIGHT / 2 + 4}" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="600" fill="#1f2937">${escapeXml(label)}</text>
+  <rect x="${pillX}" y="${pillY}" width="${pillWidth}" height="${LABEL_HEIGHT}" rx="${LABEL_RADIUS}" fill="${LABEL_BG}"/>
+  <text x="${pillX + LABEL_PAD_X}" y="${pillY + LABEL_HEIGHT / 2 + 4}" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="${LABEL_TEXT_COLOR}">${escapeXml(label)}</text>
 </svg>`;
 
   return {

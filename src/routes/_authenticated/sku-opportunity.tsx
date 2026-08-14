@@ -103,7 +103,6 @@ function SkuOpportunityPage() {
                     Shop: r.shop_name,
                     "Label name": r.label_name ?? "",
                     Area: areaByShop(r.shop_id),
-                    Address: r.address ?? "",
                     "Active products": (r.active_products ?? []).join(", "),
                     "Inactive products": (r.inactive_products ?? []).join(", "),
                     "Avg monthly sales": Number(r.avg_monthly_sales),
@@ -149,7 +148,6 @@ function SkuOpportunityPage() {
                 <TableHead className="w-14 text-right">S. No.</TableHead>
                 <TableHead>Shop name</TableHead>
                 <TableHead>Shop Area</TableHead>
-                <TableHead>Address</TableHead>
                 <TableHead>Active products</TableHead>
                 <TableHead>Inactive products</TableHead>
                 <TableHead className="text-right">
@@ -169,14 +167,14 @@ function SkuOpportunityPage() {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                     Building opportunity list…
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
                     No shops match the current filters.
                   </TableCell>
                 </TableRow>
@@ -198,9 +196,6 @@ function SkuOpportunityPage() {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {areaByShop(r.shop_id)}
-                  </TableCell>
-                  <TableCell className="max-w-[16rem] text-sm text-muted-foreground">
-                    {r.address ?? "—"}
                   </TableCell>
                   <TableCell>
                     <ProductChips names={r.active_products ?? []} />

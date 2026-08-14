@@ -15,6 +15,80 @@ export type ShopWithLocation = Shop & { latitude: number; longitude: number };
 const DEFAULT_CENTER = { lat: 20.5937, lng: 78.9629 }; // India, whole-country view
 const DEFAULT_ZOOM = 5;
 
+// Pin glyph is drawn in a 24x24 box (Google's familiar teardrop-with-hole shape),
+// with a little padding around it so the white outline stroke doesn't get clipped.
+const PIN_GLYPH_SIZE = 24;
+const PIN_PADDING = 3;
+const PIN_BOX = PIN_GLYPH_SIZE + PIN_PADDING * 2;
+const LABEL_GAP = 4;
+const LABEL_HEIGHT = 18;
+const LABEL_PAD_X = 6;
+const LABEL_FONT = "600 12px ui-sans-serif, system-ui, sans-serif";
+const MAX_LABEL_CHARS = 22;
+
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+
+/** Pixel width of a label string in LABEL_FONT, used to size the name pill. */
+function measureLabelWidth(text: string): number {
+  if (measureCtx === undefined) {
+    measureCtx = document.createElement("canvas").getContext("2d");
+  }
+  if (!measureCtx) return text.length * 7; // rough fallback if canvas is unavailable
+  measureCtx.font = LABEL_FONT;
+  return measureCtx.measureText(text).width;
+}
+
+function truncateShopName(name: string): string {
+  if (name.length <= MAX_LABEL_CHARS) return name;
+  return `${name.slice(0, MAX_LABEL_CHARS - 1).trimEnd()}…`;
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/**
+ * Builds a single combined icon: a coloured location pin (per Design Type)
+ * with the shop name in a small pill beside it. Rendered as one SVG data URI
+ * so it's a normal Google Maps marker icon — no extra overlays, no static
+ * HTML outside the map, and it pans/zooms with the map like any other marker.
+ */
+function buildPinIcon(
+  shop: ShopWithLocation,
+  Size: typeof google.maps.Size,
+  Point: typeof google.maps.Point,
+): google.maps.Icon {
+  const color = designTypeColor(shop.design_type);
+  const label = truncateShopName(shop.shop_name);
+  const pillWidth = measureLabelWidth(label) + LABEL_PAD_X * 2;
+
+  const width = PIN_BOX + LABEL_GAP + pillWidth;
+  const height = PIN_BOX;
+  const pinHeadCenterY = PIN_PADDING + 9;
+  const pillY = pinHeadCenterY - LABEL_HEIGHT / 2;
+  const pillX = PIN_BOX + LABEL_GAP;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <g transform="translate(${PIN_PADDING}, ${PIN_PADDING})">
+    <path d="M12 0C7.03 0 3 4.03 3 9c0 6.75 9 15 9 15s9-8.25 9-15c0-4.97-4.03-9-9-9z" fill="${color}" stroke="#ffffff" stroke-width="1.5"/>
+    <circle cx="12" cy="9" r="3.4" fill="#ffffff"/>
+  </g>
+  <rect x="${pillX}" y="${pillY}" width="${pillWidth}" height="${LABEL_HEIGHT}" rx="${LABEL_HEIGHT / 2}" fill="#ffffff" fill-opacity="0.95" stroke="${color}" stroke-width="1"/>
+  <text x="${pillX + LABEL_PAD_X}" y="${pillY + LABEL_HEIGHT / 2 + 4}" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="600" fill="#1f2937">${escapeXml(label)}</text>
+</svg>`;
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new Size(width, height),
+    anchor: new Point(PIN_PADDING + 12, PIN_PADDING + PIN_GLYPH_SIZE),
+  };
+}
+
 function buildInfoContent(
   shop: ShopWithLocation,
   onViewShop: (shopId: string) => void,
@@ -84,7 +158,8 @@ export default function ShopsMapInner({ shops }: { shops: ShopWithLocation[] }) 
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
   const markerCtorRef = useRef<typeof google.maps.Marker | null>(null);
-  const symbolPathRef = useRef<typeof google.maps.SymbolPath | null>(null);
+  const sizeCtorRef = useRef<typeof google.maps.Size | null>(null);
+  const pointCtorRef = useRef<typeof google.maps.Point | null>(null);
   const boundsCtorRef = useRef<typeof google.maps.LatLngBounds | null>(null);
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -93,7 +168,7 @@ export default function ShopsMapInner({ shops }: { shops: ShopWithLocation[] }) 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [{ Map, InfoWindow }, { Marker }, { SymbolPath, LatLngBounds }] = await Promise.all([
+      const [{ Map, InfoWindow }, { Marker }, { Size, Point, LatLngBounds }] = await Promise.all([
         loadMapsLibrary(),
         loadMarkerLibrary(),
         loadCoreLibrary(),
@@ -101,7 +176,8 @@ export default function ShopsMapInner({ shops }: { shops: ShopWithLocation[] }) 
       if (cancelled || !containerRef.current) return;
 
       markerCtorRef.current = Marker;
-      symbolPathRef.current = SymbolPath;
+      sizeCtorRef.current = Size;
+      pointCtorRef.current = Point;
       boundsCtorRef.current = LatLngBounds;
 
       mapRef.current = new Map(containerRef.current, {
@@ -123,24 +199,19 @@ export default function ShopsMapInner({ shops }: { shops: ShopWithLocation[] }) 
   useEffect(() => {
     const map = mapRef.current;
     const MarkerCtor = markerCtorRef.current;
-    const SymbolPath = symbolPathRef.current;
+    const SizeCtor = sizeCtorRef.current;
+    const PointCtor = pointCtorRef.current;
     const LatLngBoundsCtor = boundsCtorRef.current;
     const infoWindow = infoWindowRef.current;
-    if (!ready || !map || !MarkerCtor || !SymbolPath || !LatLngBoundsCtor || !infoWindow) return;
+    if (!ready || !map || !MarkerCtor || !SizeCtor || !PointCtor || !LatLngBoundsCtor || !infoWindow)
+      return;
 
     clustererRef.current?.clearMarkers();
 
     const markers = shops.map((shop) => {
       const marker = new MarkerCtor({
         position: { lat: shop.latitude, lng: shop.longitude },
-        icon: {
-          path: SymbolPath.CIRCLE,
-          scale: 8,
-          fillColor: designTypeColor(shop.design_type),
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 2,
-        },
+        icon: buildPinIcon(shop, SizeCtor, PointCtor),
       });
       marker.addListener("click", () => {
         infoWindow.setContent(

@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { LabelProduct, Product, Shop } from "./domain";
+import type { LabelProduct, Product, Shop, ShopArea } from "./domain";
+import { getShopImageUrl } from "./shop-image";
 
 function unwrap<T>({ data, error }: { data: T | null; error: { message: string } | null }): T {
   if (error) throw new Error(error.message);
@@ -11,9 +12,7 @@ export const productsQuery = queryOptions({
   queryKey: ["products"],
   staleTime: 5 * 60 * 1000,
   queryFn: async () =>
-    unwrap<Product[]>(
-      await supabase.from("products").select("*").order("sort_order") as never,
-    ),
+    unwrap<Product[]>((await supabase.from("products").select("*").order("sort_order")) as never),
 });
 
 export const labelProductsQuery = queryOptions({
@@ -21,7 +20,7 @@ export const labelProductsQuery = queryOptions({
   staleTime: 5 * 60 * 1000,
   queryFn: async () =>
     unwrap<LabelProduct[]>(
-      await supabase.from("label_products").select("*").order("sort_order") as never,
+      (await supabase.from("label_products").select("*").order("sort_order")) as never,
     ),
 });
 
@@ -29,8 +28,40 @@ export const shopsQuery = queryOptions({
   queryKey: ["shops"],
   staleTime: 60 * 1000,
   queryFn: async () =>
-    unwrap<Shop[]>(await supabase.from("shops").select("*").order("shop_name") as never),
+    unwrap<Shop[]>((await supabase.from("shops").select("*").order("shop_name")) as never),
 });
+
+/** Shared across every page that filters or displays a shop's area — the single source of truth. */
+export const shopAreasQuery = queryOptions({
+  queryKey: ["shop_areas"],
+  staleTime: 60 * 1000,
+  queryFn: async () =>
+    unwrap<ShopArea[]>(
+      (await supabase
+        .from("shop_areas" as never)
+        .select("id, name")
+        .order("name")) as never,
+    ),
+});
+
+/** Finds an existing area by name (case/whitespace-insensitive) or creates it. */
+export async function upsertShopArea(name: string): Promise<ShopArea> {
+  const { data, error } = await supabase.rpc(
+    "upsert_shop_area" as never,
+    { p_name: name } as never,
+  );
+  if (error) throw new Error(error.message);
+  return data as unknown as ShopArea;
+}
+
+/** Signed URL for a shop's photo — re-fetched well before the 1-hour signature expires. */
+export const shopImageUrlQuery = (path: string | null) =>
+  queryOptions({
+    queryKey: ["shop_image_url", path],
+    queryFn: () => getShopImageUrl(path as string),
+    enabled: !!path,
+    staleTime: 45 * 60 * 1000,
+  });
 
 export const availableMonthsQuery = queryOptions({
   queryKey: ["available_months"],
@@ -138,7 +169,9 @@ export const shopProductsQuery = queryOptions({
   queryKey: ["shop_products"],
   staleTime: 60 * 1000,
   queryFn: async () => {
-    const { data, error } = await supabase.from("shop_products" as never).select("shop_id, product_id");
+    const { data, error } = await supabase
+      .from("shop_products" as never)
+      .select("shop_id, product_id");
     if (error) throw new Error(error.message);
     return (data ?? []) as unknown as ShopProduct[];
   },

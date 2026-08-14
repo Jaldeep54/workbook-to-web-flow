@@ -13,8 +13,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { labelProductsQuery, labelStockQuery } from "@/lib/queries";
 import { labelOrdersQuery, nextOrderNo } from "@/lib/records";
@@ -29,7 +43,8 @@ export const Route = createFileRoute("/_authenticated/labels")({
       { title: "Labels & stock — Klinzo Operations" },
       {
         name: "description",
-        content: "Label stock per shop calculated from printed sheets minus ordered quantity, with reorder alerts.",
+        content:
+          "Label stock per shop calculated from printed sheets minus ordered quantity, with reorder alerts.",
       },
       { property: "og:title", content: "Labels & stock — Klinzo Operations" },
       { property: "og:description", content: "Label stock and printing orders in one dashboard." },
@@ -68,8 +83,18 @@ function StockDashboard() {
   const [onlyLow, setOnlyLow] = useState(true);
   const [search, setSearch] = useState("");
 
+  // A shop only "needs labels" when an ACTIVE product (one in shop_products) is low — a leftover
+  // balance on a product the shop no longer sells never counts, and is always shown as NA.
   const byShop = useMemo(() => {
-    const map = new Map<string, { shopName: string; designType: number; stock: Record<string, number>; low: number }>();
+    const map = new Map<
+      string,
+      {
+        shopName: string;
+        designType: number;
+        stock: Record<string, { value: number; active: boolean }>;
+        low: number;
+      }
+    >();
     for (const row of rows) {
       const entry = map.get(row.shop_id) ?? {
         shopName: row.shop_name,
@@ -77,8 +102,11 @@ function StockDashboard() {
         stock: {},
         low: 0,
       };
-      entry.stock[row.label_product_id] = Number(row.stock);
-      if (row.is_low) entry.low += 1;
+      entry.stock[row.label_product_id] = {
+        value: Number(row.stock),
+        active: row.shop_sells_product,
+      };
+      if (row.shop_sells_product && row.is_low) entry.low += 1;
       map.set(row.shop_id, entry);
     }
     return Array.from(map.entries()).map(([shopId, v]) => ({ shopId, ...v }));
@@ -129,7 +157,12 @@ function StockDashboard() {
                   filtered.map((s) => ({
                     Shop: s.shopName,
                     Design: s.designType,
-                    ...Object.fromEntries(labelProducts.map((lp) => [lp.short_name, s.stock[lp.id] ?? 0])),
+                    ...Object.fromEntries(
+                      labelProducts.map((lp) => [
+                        lp.short_name,
+                        s.stock[lp.id]?.active ? s.stock[lp.id].value : "NA",
+                      ]),
+                    ),
                     "Low types": s.low,
                   })),
                 )
@@ -155,14 +188,20 @@ function StockDashboard() {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={labelProducts.length + 2} className="py-10 text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={labelProducts.length + 2}
+                    className="py-10 text-center text-muted-foreground"
+                  >
                     Calculating stock…
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={labelProducts.length + 2} className="py-12 text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={labelProducts.length + 2}
+                    className="py-12 text-center text-muted-foreground"
+                  >
                     Nothing to reorder right now.
                   </TableCell>
                 </TableRow>
@@ -172,17 +211,21 @@ function StockDashboard() {
                   <TableCell className="font-medium">{s.shopName}</TableCell>
                   <TableCell className="num text-right">{s.designType}</TableCell>
                   {labelProducts.map((lp) => {
-                    const value = s.stock[lp.id] ?? 0;
-                    const low = value < lp.low_stock_threshold;
+                    const cell = s.stock[lp.id];
+                    if (!cell?.active) {
+                      return (
+                        <TableCell key={lp.id} className="num text-right text-muted-foreground">
+                          NA
+                        </TableCell>
+                      );
+                    }
+                    const low = cell.value < lp.low_stock_threshold;
                     return (
                       <TableCell
                         key={lp.id}
-                        className={cn(
-                          "num text-right",
-                          low && "font-semibold text-destructive",
-                        )}
+                        className={cn("num text-right", low && "font-semibold text-destructive")}
                       >
-                        {num(value)}
+                        {num(cell.value)}
                       </TableCell>
                     );
                   })}
@@ -224,7 +267,12 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
       const orderNo = await nextOrderNo("label_orders", shopId);
       const { data, error } = await supabase
         .from("label_orders")
-        .insert({ shop_id: shopId, order_no: orderNo, order_date: orderDate, total_labels: totals.labels })
+        .insert({
+          shop_id: shopId,
+          order_no: orderNo,
+          order_date: orderDate,
+          total_labels: totals.labels,
+        })
         .select("id")
         .single();
       if (error) throw new Error(error.message);
@@ -273,7 +321,9 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
                 Date: o.order_date ?? "",
                 Shop: o.shops?.shop_name ?? "",
                 "Order no": o.order_no,
-                ...Object.fromEntries(labelProducts.map((lp) => [`${lp.short_name} sheets`, sheetsFor(o, lp.id)])),
+                ...Object.fromEntries(
+                  labelProducts.map((lp) => [`${lp.short_name} sheets`, sheetsFor(o, lp.id)]),
+                ),
                 "Total labels": o.total_labels,
               })),
             )
@@ -298,11 +348,17 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Order date</Label>
-                <Input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
+                <Input
+                  type="date"
+                  value={orderDate}
+                  onChange={(e) => setOrderDate(e.target.value)}
+                />
               </div>
             </div>
             <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Sheets printed</p>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Sheets printed
+              </p>
               <div className="grid gap-3 sm:grid-cols-3">
                 {labelProducts.map((lp) => (
                   <div key={lp.id} className="space-y-1.5">
@@ -317,7 +373,10 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
                       className="num"
                       value={sheets[lp.id] ?? ""}
                       onChange={(e) =>
-                        setSheets({ ...sheets, [lp.id]: e.target.value === "" ? 0 : Number(e.target.value) })
+                        setSheets({
+                          ...sheets,
+                          [lp.id]: e.target.value === "" ? 0 : Number(e.target.value),
+                        })
                       }
                     />
                   </div>
@@ -365,14 +424,20 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={labelProducts.length + 4} className="py-10 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={labelProducts.length + 4}
+                  className="py-10 text-center text-muted-foreground"
+                >
                   Loading label orders…
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && orders.length === 0 && (
               <TableRow>
-                <TableCell colSpan={labelProducts.length + 4} className="py-12 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={labelProducts.length + 4}
+                  className="py-12 text-center text-muted-foreground"
+                >
                   No label orders in {monthLabel(month)}.
                 </TableCell>
               </TableRow>
@@ -380,14 +445,21 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
             {orders.map((o) => (
               <TableRow key={o.id}>
                 <TableCell>{dateLabel(o.order_date)}</TableCell>
-                <TableCell className="font-medium">{o.shops?.shop_name ?? "—"}</TableCell>
+                <TableCell className="font-medium">
+                  {o.shops?.shop_name ?? "—"}
+                  {o.shops?.label_name && (
+                    <p className="text-xs text-muted-foreground">{o.shops.label_name}</p>
+                  )}
+                </TableCell>
                 <TableCell className="num text-right">{o.order_no}</TableCell>
                 {labelProducts.map((lp) => (
                   <TableCell key={lp.id} className="num text-right">
                     {sheetsFor(o, lp.id) || "—"}
                   </TableCell>
                 ))}
-                <TableCell className="num text-right font-semibold">{num(o.total_labels)}</TableCell>
+                <TableCell className="num text-right font-semibold">
+                  {num(o.total_labels)}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

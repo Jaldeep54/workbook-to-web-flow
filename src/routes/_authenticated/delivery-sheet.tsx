@@ -1,19 +1,33 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CalendarIcon, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { ShopAreaFilter } from "@/components/filter-bar";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { productsQuery } from "@/lib/queries";
+import { productsQuery, shopsQuery } from "@/lib/queries";
 import { deliverySheetQuery } from "@/lib/records";
 import { ORDER_STATUSES } from "@/lib/domain";
 import { dateLabel, num, todayISO } from "@/lib/format";
@@ -26,7 +40,8 @@ export const Route = createFileRoute("/_authenticated/delivery-sheet")({
       { title: "Delivery sheet — Klinzo Operations" },
       {
         name: "description",
-        content: "Pick a date and see every order due for delivery, with product quantities and status updates.",
+        content:
+          "Pick a date and see every order due for delivery, with product quantities and status updates.",
       },
       { property: "og:title", content: "Delivery sheet — Klinzo Operations" },
       { property: "og:description", content: "The day's delivery run, ready to print or export." },
@@ -38,21 +53,37 @@ export const Route = createFileRoute("/_authenticated/delivery-sheet")({
 function DeliverySheetPage() {
   const qc = useQueryClient();
   const [date, setDate] = useState(todayISO());
+  const [areaFilter, setAreaFilter] = useState("all");
   const { data: products = [] } = useQuery(productsQuery);
-  const { data: orders = [], isLoading } = useQuery(deliverySheetQuery(date));
+  const { data: shops = [] } = useQuery(shopsQuery);
+  const { data: allOrders = [], isLoading } = useQuery(deliverySheetQuery(date));
+
+  const shopById = useMemo(() => new Map(shops.map((s) => [s.id, s])), [shops]);
+  const orders = useMemo(
+    () =>
+      areaFilter === "all"
+        ? allOrders
+        : allOrders.filter((o) => shopById.get(o.shop_id)?.area_id === areaFilter),
+    [allOrders, shopById, areaFilter],
+  );
 
   const setStatus = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
-      const { error } = await supabase.rpc("set_order_status" as never, {
-        p_order_id: orderId,
-        p_status: status,
-        p_delivery_date: date,
-      } as never);
+      const { error } = await supabase.rpc(
+        "set_order_status" as never,
+        {
+          p_order_id: orderId,
+          p_status: status,
+          p_delivery_date: date,
+        } as never,
+      );
       if (error) throw new Error(error.message);
     },
     onSuccess: (_d, vars) => {
       toast.success(
-        vars.status === "Delivered" ? "Marked delivered — delivery and payment created" : `Status set to ${vars.status}`,
+        vars.status === "Delivered"
+          ? "Marked delivered — delivery and payment created"
+          : `Status set to ${vars.status}`,
       );
       for (const key of [
         "delivery_sheet",
@@ -92,7 +123,10 @@ function DeliverySheetPage() {
           <>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("w-[200px] justify-start bg-card font-normal")}>
+                <Button
+                  variant="outline"
+                  className={cn("w-[200px] justify-start bg-card font-normal")}
+                >
                   <CalendarIcon className="size-4" />
                   {dateLabel(date)}
                 </Button>
@@ -111,6 +145,7 @@ function DeliverySheetPage() {
                 />
               </PopoverContent>
             </Popover>
+            <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
             <Button
               variant="outline"
               onClick={() =>
@@ -122,6 +157,7 @@ function DeliverySheetPage() {
                     "Label name": o.shops?.label_name ?? "",
                     "Order number": o.order_no,
                     Status: o.status ?? "",
+                    "Design type": shopById.get(o.shop_id)?.design_type ?? "",
                     Products: productNames(o),
                     ...Object.fromEntries(products.map((p) => [p.short_name, qtyFor(o, p.id)])),
                     "Total qty": o.total_qty,
@@ -138,7 +174,11 @@ function DeliverySheetPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Orders on this date" value={String(orders.length)} />
         <StatCard label="Units to deliver" value={num(totalQty)} tone="accent" />
-        <StatCard label="Marked delivered" value={`${delivered} / ${orders.length}`} tone="positive" />
+        <StatCard
+          label="Marked delivered"
+          value={`${delivered} / ${orders.length}`}
+          tone="positive"
+        />
       </div>
 
       <div className="surface-card overflow-x-auto">
@@ -149,7 +189,7 @@ function DeliverySheetPage() {
               <TableHead>Shop name</TableHead>
               <TableHead>Label name</TableHead>
               <TableHead className="text-right">Order no.</TableHead>
-              <TableHead>Products</TableHead>
+              <TableHead>Design Type</TableHead>
               {products.map((p) => (
                 <TableHead key={p.id} className="text-right">
                   {p.short_name}
@@ -162,14 +202,20 @@ function DeliverySheetPage() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={products.length + 7} className="py-10 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={products.length + 7}
+                  className="py-10 text-center text-muted-foreground"
+                >
                   Loading delivery sheet…
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && orders.length === 0 && (
               <TableRow>
-                <TableCell colSpan={products.length + 7} className="py-12 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={products.length + 7}
+                  className="py-12 text-center text-muted-foreground"
+                >
                   No orders scheduled for {dateLabel(date)}.
                 </TableCell>
               </TableRow>
@@ -178,9 +224,11 @@ function DeliverySheetPage() {
               <TableRow key={o.id}>
                 <TableCell className="num text-right text-muted-foreground">{i + 1}</TableCell>
                 <TableCell className="font-medium">{o.shops?.shop_name ?? "—"}</TableCell>
-                <TableCell className="text-muted-foreground">{o.shops?.label_name ?? "—"}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {o.shops?.label_name ?? "—"}
+                </TableCell>
                 <TableCell className="num text-right">{o.order_no}</TableCell>
-                <TableCell className="max-w-[18rem] text-sm">{productNames(o) || "—"}</TableCell>
+                <TableCell className="num">{shopById.get(o.shop_id)?.design_type ?? "—"}</TableCell>
                 {products.map((p) => (
                   <TableCell key={p.id} className="num text-right">
                     {qtyFor(o, p.id) || "—"}

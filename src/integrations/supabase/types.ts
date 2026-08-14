@@ -540,6 +540,27 @@ export type Database = {
         }
         Relationships: []
       }
+      shop_areas: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shop_products: {
         Row: {
           created_at: string
@@ -600,12 +621,14 @@ export type Database = {
       shops: {
         Row: {
           address: string | null
+          area_id: string | null
           code: string
           created_at: string
           design_type: number
           folder_name: string | null
           handled_by: string | null
           id: string
+          image_path: string | null
           is_active: boolean
           joined_on: string | null
           label_name: string | null
@@ -617,12 +640,14 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          area_id?: string | null
           code: string
           created_at?: string
           design_type?: number
           folder_name?: string | null
           handled_by?: string | null
           id?: string
+          image_path?: string | null
           is_active?: boolean
           joined_on?: string | null
           label_name?: string | null
@@ -634,12 +659,14 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          area_id?: string | null
           code?: string
           created_at?: string
           design_type?: number
           folder_name?: string | null
           handled_by?: string | null
           id?: string
+          image_path?: string | null
           is_active?: boolean
           joined_on?: string | null
           label_name?: string | null
@@ -649,7 +676,15 @@ export type Database = {
           shop_name?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shops_area_id_fkey"
+            columns: ["area_id"]
+            isOneToOne: false
+            referencedRelation: "shop_areas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -779,6 +814,15 @@ export type Database = {
       set_order_delivered: {
         Args: { p_delivery_date: string; p_order_id: string }
         Returns: string
+      }
+      upsert_shop_area: {
+        Args: { p_name: string }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
       }
       set_order_status: {
         Args: { p_delivery_date?: string; p_order_id: string; p_status: string }

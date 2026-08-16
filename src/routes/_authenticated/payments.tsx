@@ -78,7 +78,7 @@ function PaymentsPage() {
     },
     onSuccess: () => {
       toast.success("Payment updated");
-      for (const key of ["payments", "dashboard_summary", "available_months"]) {
+      for (const key of ["payments", "dashboard_summary", "available_months", "shop_history"]) {
         void qc.invalidateQueries({ queryKey: [key] });
       }
     },

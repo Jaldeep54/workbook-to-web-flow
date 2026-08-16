@@ -95,6 +95,8 @@ function DeliverySheetPage() {
         "available_months",
         "order_qty_by_product",
         "sku_opportunity",
+        "shop_history",
+        "shop_analysis",
       ]) {
         void qc.invalidateQueries({ queryKey: [key] });
       }

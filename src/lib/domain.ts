@@ -168,3 +168,86 @@ export function recentMonths(count = 18): string[] {
   }
   return out;
 }
+
+/**
+ * Shop Analysis / Shop Sales Indicator
+ *
+ * Rolling window length (in months, including the current month) used for every
+ * Shop Analysis metric — product mix, order frequency, monthly sales. Centralized
+ * here so it can be changed in one place; it's passed straight through to the
+ * shop_analysis() Supabase RPC, which does the actual month-bucketed aggregation.
+ */
+export const SHOP_ANALYSIS_MONTHS = 3;
+
+export type SalesPerformanceStatus =
+  | "very_low"
+  | "low"
+  | "good"
+  | "very_good"
+  | "no_area"
+  | "insufficient_area_data"
+  | "no_area_data";
+
+export type ShopSalesPerformance = {
+  status: SalesPerformanceStatus;
+  /** null whenever status is one of the no-data/no-area variants. */
+  percentageDifference: number | null;
+  shopAverage: number;
+  areaAverage: number | null;
+};
+
+const STATUS_LABEL: Record<SalesPerformanceStatus, string> = {
+  very_low: "Very Low",
+  low: "Low",
+  good: "Good",
+  very_good: "Very Good",
+  no_area: "Shop area not assigned",
+  insufficient_area_data: "Insufficient area data",
+  no_area_data: "Not enough area sales data",
+};
+
+export function salesPerformanceLabel(status: SalesPerformanceStatus): string {
+  return STATUS_LABEL[status];
+}
+
+/**
+ * Single source of truth for "is this shop doing well against its area peers?" —
+ * used identically by the Shop Analysis tab and the New Order form's Shop Sales
+ * Indicator, so the two never disagree. Thresholds live here, not duplicated
+ * anywhere else, so they can be tuned in one place later.
+ *
+ *   Very Low   difference < -20%
+ *   Low        -20% <= difference < -1%
+ *   Good       -1% <= difference <= +20%
+ *   Very Good  difference > +20%
+ *
+ * `areaAverage`/`eligibleAreaShops` come straight from shop_analysis()'s
+ * monthlySales.area (null when no peer shop in the area has sales data yet) and
+ * monthlySales.areaEligibleShopCount (total active shops sharing the area,
+ * including this one — needs to be >= 2 for a comparison to mean anything).
+ */
+export function getShopSalesPerformance(
+  shopAverage: number,
+  areaAverage: number | null,
+  hasArea: boolean,
+  eligibleAreaShops: number,
+): ShopSalesPerformance {
+  if (!hasArea) {
+    return { status: "no_area", percentageDifference: null, shopAverage, areaAverage: null };
+  }
+  if (eligibleAreaShops < 2) {
+    return { status: "insufficient_area_data", percentageDifference: null, shopAverage, areaAverage: null };
+  }
+  if (areaAverage === null || areaAverage === 0) {
+    return { status: "no_area_data", percentageDifference: null, shopAverage, areaAverage: areaAverage ?? 0 };
+  }
+
+  const percentageDifference = ((shopAverage - areaAverage) / areaAverage) * 100;
+  let status: SalesPerformanceStatus;
+  if (percentageDifference < -20) status = "very_low";
+  else if (percentageDifference < -1) status = "low";
+  else if (percentageDifference <= 20) status = "good";
+  else status = "very_good";
+
+  return { status, percentageDifference, shopAverage, areaAverage };
+}

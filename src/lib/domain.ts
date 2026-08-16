@@ -3,7 +3,7 @@
  *
  * Workbook rules preserved here:
  *  - Sales            = Σ qty × selling price
- *  - Labelling cost   = Σ qty × label cost per unit (LL700 = front label only, as in Excel)
+ *  - Labelling cost   = Σ qty × label cost per unit
  *  - Jar & can cost   = Σ qty × packaging cost
  *  - Production cost  = Σ qty × production cost
  *  - Total fixed cost = production + jar & can + labelling
@@ -21,6 +21,11 @@ export type Product = {
   selling_price: number;
   production_cost: number;
   packaging_cost: number;
+  /**
+   * Sum of `sheet_cost / labels_per_sheet` across every label_products row for this
+   * product (Rates & Settings → Label rates). Kept in sync by a database trigger
+   * whenever a label is added, removed, re-priced, or reassigned — never edited directly.
+   */
   label_cost_per_unit: number;
   is_active: boolean;
 };

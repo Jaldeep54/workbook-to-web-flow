@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { labelProductsQuery, productsQuery } from "@/lib/queries";
 import type { LabelProduct, Product } from "@/lib/domain";
+import { inr } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -63,7 +64,6 @@ function ProductRates() {
             selling_price: row.selling_price,
             production_cost: row.production_cost,
             packaging_cost: row.packaging_cost,
-            label_cost_per_unit: row.label_cost_per_unit,
           })
           .eq("id", row.id);
         if (error) throw new Error(error.message);
@@ -95,7 +95,7 @@ function ProductRates() {
           {rows.map((p) => (
             <TableRow key={p.id}>
               <TableCell className="font-medium">{p.name}</TableCell>
-              {(["selling_price", "production_cost", "packaging_cost", "label_cost_per_unit"] as const).map((key) => (
+              {(["selling_price", "production_cost", "packaging_cost"] as const).map((key) => (
                 <TableCell key={key} className="text-right">
                   <Input
                     type="number"
@@ -106,6 +106,12 @@ function ProductRates() {
                   />
                 </TableCell>
               ))}
+              <TableCell
+                className="num text-right text-muted-foreground"
+                title="Sum of sheet cost ÷ labels per sheet across this product's labels — edit under the Label rates tab."
+              >
+                {inr(p.label_cost_per_unit, 2)}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -144,6 +150,9 @@ function LabelRates() {
       void qc.invalidateQueries({ queryKey: ["label_products"] });
       void qc.invalidateQueries({ queryKey: ["label_stock"] });
       void qc.invalidateQueries({ queryKey: ["label_stock_summary"] });
+      // The database recalculates each product's Label / unit from these rates —
+      // refetch so the Product rates tab picks up the new figure immediately.
+      void qc.invalidateQueries({ queryKey: ["products"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

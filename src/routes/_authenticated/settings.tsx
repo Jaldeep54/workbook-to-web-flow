@@ -8,7 +8,14 @@ import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { labelProductsQuery, productsQuery } from "@/lib/queries";
 import type { LabelProduct, Product } from "@/lib/domain";
@@ -18,7 +25,11 @@ export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
     meta: [
       { title: "Rates & settings — Klinzo Operations" },
-      { name: "description", content: "Selling price, production, packaging and label rates that drive every calculation." },
+      {
+        name: "description",
+        content:
+          "Selling price, production, packaging and label rates that drive every calculation.",
+      },
       { property: "og:title", content: "Rates & settings — Klinzo Operations" },
       { property: "og:description", content: "The Inputs sheet, editable and instantly applied." },
     ],
@@ -37,12 +48,16 @@ function SettingsPage() {
         <TabsList>
           <TabsTrigger value="products">Product rates</TabsTrigger>
           <TabsTrigger value="labels">Label rates</TabsTrigger>
+          <TabsTrigger value="sales">Sales rates</TabsTrigger>
         </TabsList>
         <TabsContent value="products" className="pt-4">
           <ProductRates />
         </TabsContent>
         <TabsContent value="labels" className="pt-4">
           <LabelRates />
+        </TabsContent>
+        <TabsContent value="sales" className="pt-4">
+          <SalesRates />
         </TabsContent>
       </Tabs>
     </>
@@ -111,6 +126,74 @@ function ProductRates() {
                 title="Sum of sheet cost ÷ labels per sheet across this product's labels — edit under the Label rates tab."
               >
                 {inr(p.label_cost_per_unit, 2)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <div className="border-t border-border p-3 text-right">
+        <Button onClick={() => save.mutate()} disabled={save.isPending}>
+          <Save className="size-4" /> Save rates
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Sales / unit — the same products.selling_price column the Product rates tab
+ * already edits (and computeDeliveryTotals already uses for totalSales), just
+ * in a dedicated, product-name-focused view. No new field: one source of
+ * truth, two editing surfaces.
+ */
+function SalesRates() {
+  const qc = useQueryClient();
+  const { data = [] } = useQuery(productsQuery);
+  const [rows, setRows] = useState<Product[]>([]);
+  useEffect(() => setRows(data), [data]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      for (const row of rows) {
+        const { error } = await supabase
+          .from("products")
+          .update({ selling_price: row.selling_price })
+          .eq("id", row.id);
+        if (error) throw new Error(error.message);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Sales rates saved");
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const set = (id: string, value: number) =>
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, selling_price: value } : r)));
+
+  return (
+    <div className="surface-card overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Product</TableHead>
+            <TableHead className="text-right">Sales / unit</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((p) => (
+            <TableRow key={p.id}>
+              <TableCell className="font-medium">{p.name}</TableCell>
+              <TableCell className="text-right">
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="num ml-auto w-28 text-right"
+                  value={p.selling_price}
+                  onChange={(e) => set(p.id, Number(e.target.value))}
+                />
               </TableCell>
             </TableRow>
           ))}

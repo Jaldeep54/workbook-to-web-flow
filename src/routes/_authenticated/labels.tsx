@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { MonthPicker } from "@/components/month-picker";
 import { ShopFilter, ShopSelect } from "@/components/filter-bar";
+import { LabelOrderSuggestionTab } from "@/components/label-order-suggestion";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,22 +56,32 @@ export const Route = createFileRoute("/_authenticated/labels")({
 
 function LabelsPage() {
   const [month, setMonth] = useState(currentMonth());
+  const [tab, setTab] = useState("stock");
   return (
     <>
       <PageHeader
         title="Labels & stock"
         description="Stock = labels printed − labels used by orders, exactly as the workbook calculated it"
       />
-      <Tabs defaultValue="stock">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="stock">Stock dashboard</TabsTrigger>
           <TabsTrigger value="orders">Label orders</TabsTrigger>
+          <TabsTrigger value="suggestion">Label Order Suggestion</TabsTrigger>
         </TabsList>
         <TabsContent value="stock" className="pt-4">
           <StockDashboard />
         </TabsContent>
         <TabsContent value="orders" className="pt-4">
           <LabelOrders month={month} setMonth={setMonth} />
+        </TabsContent>
+        <TabsContent value="suggestion" className="pt-4">
+          <LabelOrderSuggestionTab
+            onOrdersPlaced={(placedMonth) => {
+              setMonth(placedMonth);
+              setTab("orders");
+            }}
+          />
         </TabsContent>
       </Tabs>
     </>

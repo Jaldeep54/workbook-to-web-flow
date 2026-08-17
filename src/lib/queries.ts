@@ -1,7 +1,12 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { LabelProduct, Product, Shop, ShopArea } from "./domain";
-import { SHOP_ANALYSIS_MONTHS } from "./domain";
+import type { LabelProduct, LabelSuggestionStatus, Product, Shop, ShopArea } from "./domain";
+import {
+  LABEL_ORDER_HISTORY_MONTHS,
+  LABEL_ORDER_SAFETY_BUFFER_PCT,
+  LABEL_ORDER_TARGET_MONTHS,
+  SHOP_ANALYSIS_MONTHS,
+} from "./domain";
 import { getShopImageUrl } from "./shop-image";
 
 function unwrap<T>({ data, error }: { data: T | null; error: { message: string } | null }): T {
@@ -285,5 +290,63 @@ export const shopAnalysisQuery = (shopId: string, months: number = SHOP_ANALYSIS
       return data as unknown as ShopAnalysis;
     },
     enabled: !!shopId,
+    staleTime: 60 * 1000,
+  });
+
+/**
+ * Label Order Suggestion — one row per shop x label_product the shop carries.
+ * Backed entirely by the label_order_suggestions() RPC: current stock reuses
+ * label_stock_view's exact formula, forecast is a recency-weighted average of
+ * order_lines history, and status/suggested_sheets follow directly from the
+ * 2-month-target + safety-buffer rule (see domain.ts and the migration for
+ * the full methodology).
+ */
+export type LabelOrderSuggestionRow = {
+  shop_id: string;
+  shop_name: string;
+  shop_code: string;
+  label_product_id: string;
+  label_product_key: string;
+  label_product_name: string;
+  label_product_short_name: string;
+  label_product_sort_order: number;
+  product_id: string;
+  labels_per_sheet: number;
+  sheet_cost: number;
+  current_stock: number;
+  months_of_history: number;
+  has_limited_history: boolean;
+  monthly_forecast: number;
+  recent_avg: number | null;
+  baseline_avg: number | null;
+  is_growth: boolean;
+  two_month_requirement: number;
+  safety_buffer: number;
+  target_stock: number;
+  additional_requirement: number;
+  suggested_sheets: number;
+  daily_rate: number;
+  projected_stockout_date: string | null;
+  is_emergency: boolean;
+  status: LabelSuggestionStatus;
+};
+
+export const labelOrderSuggestionsQuery = (nextProcurementDate: string) =>
+  queryOptions({
+    queryKey: ["label_order_suggestions", nextProcurementDate],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(
+        "label_order_suggestions" as never,
+        {
+          p_next_procurement_date: nextProcurementDate,
+          p_months_target: LABEL_ORDER_TARGET_MONTHS,
+          p_safety_buffer_pct: LABEL_ORDER_SAFETY_BUFFER_PCT,
+          p_history_months: LABEL_ORDER_HISTORY_MONTHS,
+        } as never,
+      );
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as LabelOrderSuggestionRow[];
+    },
+    enabled: !!nextProcurementDate,
     staleTime: 60 * 1000,
   });

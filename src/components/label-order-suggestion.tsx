@@ -6,9 +6,7 @@ import { toast } from "sonner";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
@@ -97,11 +95,18 @@ export function LabelOrderSuggestionTab({
   // only cleared via the confirmed "Regenerate Suggestions" action.
   const [edited, setEdited] = useState<Record<string, number>>({});
   const [includeOverride, setIncludeOverride] = useState<Record<string, boolean>>({});
-  const [showMonitor, setShowMonitor] = useState(false);
   const [expandedShop, setExpandedShop] = useState<string | null>(null);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [placeOpen, setPlaceOpen] = useState(false);
 
+  // Shop-level status is deliberately NOT "the worst individual product status" —
+  // a red/urgent product is only the trigger to review the whole shop. Once
+  // triggered (or even without an urgent trigger), every product the shop
+  // carries that's below ITS OWN 2-month target belongs in one consolidated
+  // recommendation, so the printer only has to visit each shop once:
+  //   any product below its low-stock threshold      -> shop is Urgent
+  //   else any product below its 2-month target       -> shop is Recommended
+  //   else (every product at/above its 2-month target) -> shop is No Order Required
   const groups: ShopGroup[] = useMemo(() => {
     const byShop = new Map<string, ShopGroup>();
     for (const r of rows) {
@@ -117,7 +122,16 @@ export function LabelOrderSuggestionTab({
         byShop.set(r.shop_id, g);
       }
       g.rowByLabelProduct.set(r.label_product_id, r);
-      if (STATUS_RANK[r.status] < STATUS_RANK[g.rollupStatus]) g.rollupStatus = r.status;
+    }
+    for (const g of byShop.values()) {
+      const products = Array.from(g.rowByLabelProduct.values());
+      const hasUrgent = products.some((r) => r.status === "urgent");
+      const hasBelowTwoMonthTarget = products.some((r) => r.status !== "no_order_required");
+      g.rollupStatus = hasUrgent
+        ? "urgent"
+        : hasBelowTwoMonthTarget
+          ? "recommended"
+          : "no_order_required";
     }
     return Array.from(byShop.values()).sort(
       (a, b) =>
@@ -126,19 +140,14 @@ export function LabelOrderSuggestionTab({
     );
   }, [rows]);
 
+  // No-order shops are never shown — everything visible needs action, so it's
+  // always included by default (the user can still uncheck a shop manually).
   const visibleGroups = useMemo(
-    () =>
-      groups.filter(
-        (g) =>
-          g.rollupStatus === "urgent" ||
-          g.rollupStatus === "recommended" ||
-          (showMonitor && g.rollupStatus === "monitor"),
-      ),
-    [groups, showMonitor],
+    () => groups.filter((g) => g.rollupStatus !== "no_order_required"),
+    [groups],
   );
 
-  const isIncluded = (g: ShopGroup) =>
-    includeOverride[g.shopId] ?? (g.rollupStatus === "urgent" || g.rollupStatus === "recommended");
+  const isIncluded = (g: ShopGroup) => includeOverride[g.shopId] ?? true;
 
   const finalQty = (row: LabelOrderSuggestionRow) =>
     edited[cellKey(row.shop_id, row.label_product_id)] ?? row.suggested_sheets;
@@ -150,9 +159,7 @@ export function LabelOrderSuggestionTab({
     let labels = 0;
     let sheetCost = 0;
     for (const g of visibleGroups) {
-      const included =
-        includeOverride[g.shopId] ??
-        (g.rollupStatus === "urgent" || g.rollupStatus === "recommended");
+      const included = includeOverride[g.shopId] ?? true;
       if (!included) continue;
       let shopHasSheets = false;
       for (const lp of labelProducts) {
@@ -258,21 +265,13 @@ export function LabelOrderSuggestionTab({
         <div>
           <h2 className="text-base font-semibold">Label Order Suggestion</h2>
           <p className="text-xs text-muted-foreground">
-            Target = low stock threshold + monthly usage · Average usage from the last{" "}
-            {LABEL_SUGGESTION_HISTORY_MONTHS} months
+            One consolidated row per shop — every product below its 2-month target, not just the one
+            that went red · Usage average from the last {LABEL_SUGGESTION_HISTORY_MONTHS} months
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Switch id="show-monitor" checked={showMonitor} onCheckedChange={setShowMonitor} />
-            <Label htmlFor="show-monitor" className="text-xs">
-              Show Monitor items
-            </Label>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setRegenerateOpen(true)}>
-            <RotateCcw className="size-4" /> Regenerate Suggestions
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => setRegenerateOpen(true)}>
+          <RotateCcw className="size-4" /> Regenerate Suggestions
+        </Button>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3 lg:grid-cols-6">

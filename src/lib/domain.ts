@@ -256,52 +256,37 @@ export function getShopSalesPerformance(
 /**
  * Label Order Suggestion
  *
- * Klinzo places label print orders only on the 1st and 16th of each month.
- * Target label stock is 2 months of expected consumption (never 3) plus a
- * safety buffer that's a percentage of that 2-month requirement. All three
- * numbers are centralized here and passed straight through to the
- * label_order_suggestions() RPC, which does the actual forecasting — so
- * they can be tuned in one place without touching the database function.
+ * Threshold-based reorder recommendation, computed entirely by the
+ * label_order_suggestions() RPC (current stock reused verbatim from
+ * label_stock_view, never recalculated here):
+ *
+ *   1-month target = low_stock_threshold + 1 x average monthly usage
+ *   2-month target = low_stock_threshold + 2 x average monthly usage
+ *   Suggested sheets = CEIL(MAX(0, 2-month target − current stock) / labels per sheet)
+ *
+ * Average monthly usage is the shop/product's order_lines quantity over the
+ * last LABEL_SUGGESTION_HISTORY_MONTHS months (default 3 — the same rolling
+ * window shop_analysis() uses for monthlySales) divided by that fixed month
+ * count, passed straight through to the RPC so it can be tuned in one place.
+ *
+ * Status uses the exact same low_stock_threshold the Label Stock table turns
+ * red on, so the two indicators can never disagree for the same stock value:
+ *   current stock < threshold                       -> urgent
+ *   threshold <= current stock < 1-month target      -> recommended
+ *   1-month target <= current stock < 2-month target -> monitor
+ *   current stock >= 2-month target                  -> no_order_required
  */
-export const LABEL_ORDER_TARGET_MONTHS = 2;
-export const LABEL_ORDER_SAFETY_BUFFER_PCT = 0.1;
-export const LABEL_ORDER_HISTORY_MONTHS = 6;
+export const LABEL_SUGGESTION_HISTORY_MONTHS = 3;
 
-export type LabelSuggestionStatus = "emergency" | "order_recommended" | "watch" | "no_order";
+export type LabelSuggestionStatus = "urgent" | "recommended" | "monitor" | "no_order_required";
 
 const LABEL_SUGGESTION_STATUS_LABEL: Record<LabelSuggestionStatus, string> = {
-  emergency: "Emergency",
-  order_recommended: "Order Recommended",
-  watch: "Watch",
-  no_order: "No Order",
+  urgent: "Urgent",
+  recommended: "Recommended",
+  monitor: "Monitor",
+  no_order_required: "No Order Required",
 };
 
 export function labelSuggestionStatusLabel(status: LabelSuggestionStatus): string {
   return LABEL_SUGGESTION_STATUS_LABEL[status];
-}
-
-/**
- * Given "today," returns the current planning date (the 1st or 16th at or
- * before today) and the next procurement date (the other one, coming up
- * next) as YYYY-MM-DD strings — the same shape monthKey()/dateLabel() use
- * elsewhere in the app.
- */
-export function getProcurementDates(today: Date = new Date()): {
-  planningDate: string;
-  nextProcurementDate: string;
-} {
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const day = today.getDate();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const iso = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
-
-  if (day < 16) {
-    return { planningDate: iso(year, month, 1), nextProcurementDate: iso(year, month, 16) };
-  }
-  const nextMonth = new Date(year, month + 1, 1);
-  return {
-    planningDate: iso(year, month, 16),
-    nextProcurementDate: iso(nextMonth.getFullYear(), nextMonth.getMonth(), 1),
-  };
 }

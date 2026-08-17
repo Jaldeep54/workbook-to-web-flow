@@ -36,7 +36,7 @@ import {
 } from "@/lib/queries";
 import { nextOrderNo } from "@/lib/records";
 import {
-  getProcurementDates,
+  LABEL_SUGGESTION_HISTORY_MONTHS,
   labelSuggestionStatusLabel,
   labelsFromSheets,
   monthKey,
@@ -46,24 +46,24 @@ import { dateLabel, inr, num, todayISO } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const STATUS_RANK: Record<LabelSuggestionStatus, number> = {
-  emergency: 0,
-  order_recommended: 1,
-  watch: 2,
-  no_order: 3,
+  urgent: 0,
+  recommended: 1,
+  monitor: 2,
+  no_order_required: 3,
 };
 
 const STATUS_DOT: Record<LabelSuggestionStatus, string> = {
-  emergency: "🔴",
-  order_recommended: "🟠",
-  watch: "🟡",
-  no_order: "🟢",
+  urgent: "🔴",
+  recommended: "🟠",
+  monitor: "🟡",
+  no_order_required: "🟢",
 };
 
 const STATUS_BADGE_CLASS: Record<LabelSuggestionStatus, string> = {
-  emergency: "border-transparent bg-destructive text-destructive-foreground",
-  order_recommended: "border-transparent bg-warning text-warning-foreground",
-  watch: "border-transparent bg-secondary text-secondary-foreground",
-  no_order: "border-transparent bg-muted text-muted-foreground",
+  urgent: "border-transparent bg-destructive text-destructive-foreground",
+  recommended: "border-transparent bg-warning text-warning-foreground",
+  monitor: "border-transparent bg-secondary text-secondary-foreground",
+  no_order_required: "border-transparent bg-muted text-muted-foreground",
 };
 
 type ShopGroup = {
@@ -90,19 +90,14 @@ export function LabelOrderSuggestionTab({
   onOrdersPlaced?: (month: string) => void;
 }) {
   const qc = useQueryClient();
-  const { planningDate, nextProcurementDate } = useMemo(() => getProcurementDates(), []);
   const { data: labelProducts = [] } = useQuery(labelProductsQuery);
-  const {
-    data: rows = [],
-    isLoading,
-    refetch,
-  } = useQuery(labelOrderSuggestionsQuery(nextProcurementDate));
+  const { data: rows = [], isLoading, refetch } = useQuery(labelOrderSuggestionsQuery);
 
   // Only ever populated by explicit user action — never overwritten by a refetch,
   // only cleared via the confirmed "Regenerate Suggestions" action.
   const [edited, setEdited] = useState<Record<string, number>>({});
   const [includeOverride, setIncludeOverride] = useState<Record<string, boolean>>({});
-  const [showWatch, setShowWatch] = useState(false);
+  const [showMonitor, setShowMonitor] = useState(false);
   const [expandedShop, setExpandedShop] = useState<string | null>(null);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [placeOpen, setPlaceOpen] = useState(false);
@@ -116,7 +111,7 @@ export function LabelOrderSuggestionTab({
           shopId: r.shop_id,
           shopName: r.shop_name,
           shopCode: r.shop_code,
-          rollupStatus: "no_order",
+          rollupStatus: "no_order_required",
           rowByLabelProduct: new Map(),
         };
         byShop.set(r.shop_id, g);
@@ -135,16 +130,15 @@ export function LabelOrderSuggestionTab({
     () =>
       groups.filter(
         (g) =>
-          g.rollupStatus === "emergency" ||
-          g.rollupStatus === "order_recommended" ||
-          (showWatch && g.rollupStatus === "watch"),
+          g.rollupStatus === "urgent" ||
+          g.rollupStatus === "recommended" ||
+          (showMonitor && g.rollupStatus === "monitor"),
       ),
-    [groups, showWatch],
+    [groups, showMonitor],
   );
 
   const isIncluded = (g: ShopGroup) =>
-    includeOverride[g.shopId] ??
-    (g.rollupStatus === "emergency" || g.rollupStatus === "order_recommended");
+    includeOverride[g.shopId] ?? (g.rollupStatus === "urgent" || g.rollupStatus === "recommended");
 
   const finalQty = (row: LabelOrderSuggestionRow) =>
     edited[cellKey(row.shop_id, row.label_product_id)] ?? row.suggested_sheets;
@@ -158,7 +152,7 @@ export function LabelOrderSuggestionTab({
     for (const g of visibleGroups) {
       const included =
         includeOverride[g.shopId] ??
-        (g.rollupStatus === "emergency" || g.rollupStatus === "order_recommended");
+        (g.rollupStatus === "urgent" || g.rollupStatus === "recommended");
       if (!included) continue;
       let shopHasSheets = false;
       for (const lp of labelProducts) {
@@ -264,15 +258,15 @@ export function LabelOrderSuggestionTab({
         <div>
           <h2 className="text-base font-semibold">Label Order Suggestion</h2>
           <p className="text-xs text-muted-foreground">
-            Planning date: {dateLabel(planningDate)} · Next procurement:{" "}
-            {dateLabel(nextProcurementDate)}
+            Target = low stock threshold + monthly usage · Average usage from the last{" "}
+            {LABEL_SUGGESTION_HISTORY_MONTHS} months
           </p>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <Switch id="show-watch" checked={showWatch} onCheckedChange={setShowWatch} />
-            <Label htmlFor="show-watch" className="text-xs">
-              Show Watch items
+            <Switch id="show-monitor" checked={showMonitor} onCheckedChange={setShowMonitor} />
+            <Label htmlFor="show-monitor" className="text-xs">
+              Show Monitor items
             </Label>
           </div>
           <Button variant="outline" size="sm" onClick={() => setRegenerateOpen(true)}>
@@ -426,18 +420,18 @@ export function LabelOrderSuggestionTab({
                                   <div className="num space-y-0.5 text-muted-foreground">
                                     <Row label="Current stock" value={num(row.current_stock)} />
                                     <Row
-                                      label="Monthly consumption"
-                                      value={`${num(row.monthly_forecast)}${row.has_limited_history ? " (limited history)" : ""}`}
+                                      label="Low stock threshold"
+                                      value={num(row.low_stock_threshold)}
                                     />
                                     <Row
-                                      label="2-month requirement"
-                                      value={num(row.two_month_requirement)}
+                                      label="Avg monthly usage"
+                                      value={num(row.avg_monthly_usage)}
                                     />
-                                    <Row label="Safety buffer" value={num(row.safety_buffer)} />
-                                    <Row label="Target" value={num(row.target_stock)} />
+                                    <Row label="1-month target" value={num(row.one_month_target)} />
+                                    <Row label="2-month target" value={num(row.two_month_target)} />
                                     <Row
-                                      label="Additional requirement"
-                                      value={num(row.additional_requirement)}
+                                      label="Additional required"
+                                      value={num(row.additional_required)}
                                     />
                                     <Row
                                       label="Labels per sheet"
@@ -447,15 +441,10 @@ export function LabelOrderSuggestionTab({
                                       label="Suggested"
                                       value={`${num(row.suggested_sheets)} sheets`}
                                     />
-                                    {row.is_growth && (
-                                      <Row label="Trend" value="High growth in recent orders" />
-                                    )}
-                                    {row.is_emergency && row.projected_stockout_date && (
-                                      <Row
-                                        label="Projected stockout"
-                                        value={dateLabel(row.projected_stockout_date)}
-                                      />
-                                    )}
+                                    <Row
+                                      label="Stock after order"
+                                      value={num(row.expected_stock_after_order)}
+                                    />
                                   </div>
                                 </div>
                               );
@@ -498,7 +487,7 @@ export function LabelOrderSuggestionTab({
             <AlertDialogTitle>Confirm Label Order</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="num space-y-1 pt-2 text-sm text-foreground">
-                <Row label="Planning date" value={dateLabel(planningDate)} />
+                <Row label="Order date" value={dateLabel(todayISO())} />
                 <Row label="Shops" value={String(totals.shopsCount)} />
                 <Row label="Label designs" value={String(totals.designsCount)} />
                 <Row label="Total sheets" value={num(totals.sheets)} />

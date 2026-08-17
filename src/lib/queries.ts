@@ -293,8 +293,9 @@ export const shopAnalysisQuery = (shopId: string, months: number = SHOP_ANALYSIS
  * Backed entirely by the label_order_suggestions() RPC: current stock reuses
  * label_stock_view's exact formula, average monthly usage is a simple average
  * of order_lines history, and status/suggested_sheets follow directly from
- * the low_stock_threshold-based 1-month/2-month target rule (see domain.ts
- * and the migration for the full methodology).
+ * the low_stock_threshold-based 1-month/2-month target rule, computed off an
+ * effective (never-negative) stock figure (see domain.ts and the migration
+ * for the full methodology).
  */
 export type LabelOrderSuggestionRow = {
   shop_id: string;
@@ -310,6 +311,7 @@ export type LabelOrderSuggestionRow = {
   sheet_cost: number;
   low_stock_threshold: number;
   current_stock: number;
+  has_stock_data_issue: boolean;
   avg_monthly_usage: number;
   one_month_target: number;
   two_month_target: number;

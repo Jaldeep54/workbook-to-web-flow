@@ -258,11 +258,15 @@ export function getShopSalesPerformance(
  *
  * Threshold-based reorder recommendation, computed entirely by the
  * label_order_suggestions() RPC (current stock reused verbatim from
- * label_stock_view, never recalculated here):
+ * label_stock_view, never recalculated here). Negative stock — a data/test
+ * inconsistency — is floored at zero for every downstream calculation (never
+ * lets a shop sitting at, say, -40 look like it needs 40 fewer labels than a
+ * shop at 0); the raw figure is still returned for display, flagged via
+ * `has_stock_data_issue`:
  *
  *   1-month target = low_stock_threshold + 1 x average monthly usage
  *   2-month target = low_stock_threshold + 2 x average monthly usage
- *   Suggested sheets = CEIL(MAX(0, 2-month target − current stock) / labels per sheet)
+ *   Suggested sheets = CEIL(MAX(0, 2-month target − effective stock) / labels per sheet)
  *
  * Average monthly usage is the shop/product's order_lines quantity over the
  * last LABEL_SUGGESTION_HISTORY_MONTHS months (default 3 — the same rolling
@@ -271,10 +275,10 @@ export function getShopSalesPerformance(
  *
  * Status uses the exact same low_stock_threshold the Label Stock table turns
  * red on, so the two indicators can never disagree for the same stock value:
- *   current stock < threshold                       -> urgent
- *   threshold <= current stock < 1-month target      -> recommended
- *   1-month target <= current stock < 2-month target -> monitor
- *   current stock >= 2-month target                  -> no_order_required
+ *   effective stock < threshold                       -> urgent
+ *   threshold <= effective stock < 1-month target      -> recommended
+ *   1-month target <= effective stock < 2-month target -> monitor
+ *   effective stock >= 2-month target                  -> no_order_required
  */
 export const LABEL_SUGGESTION_HISTORY_MONTHS = 3;
 

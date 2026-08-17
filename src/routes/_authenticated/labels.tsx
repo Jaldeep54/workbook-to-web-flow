@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { AlertTriangle, Download, Plus } from "lucide-react";
+import { AlertTriangle, Download, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
@@ -23,6 +23,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -32,7 +42,7 @@ import {
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { labelProductsQuery, labelStockQuery } from "@/lib/queries";
-import { labelOrdersQuery, nextOrderNo } from "@/lib/records";
+import { labelOrdersQuery, nextOrderNo, type LabelOrderRecord } from "@/lib/records";
 import { currentMonth, labelsFromSheets, monthKey, monthLabel } from "@/lib/domain";
 import { dateLabel, inr, num, todayISO } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
@@ -257,6 +267,7 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
   const [shopId, setShopId] = useState("");
   const [orderDate, setOrderDate] = useState(todayISO());
   const [sheets, setSheets] = useState<Record<string, number>>({});
+  const [orderToDelete, setOrderToDelete] = useState<LabelOrderRecord | null>(null);
 
   const { data: labelProducts = [] } = useQuery(labelProductsQuery);
   const { data: orders = [], isLoading } = useQuery(labelOrdersQuery(month, shopFilter));
@@ -311,6 +322,28 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
       void qc.invalidateQueries({ queryKey: ["dashboard_summary"] });
       void qc.invalidateQueries({ queryKey: ["available_months"] });
       setMonth(monthKey(orderDate));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteOrder = useMutation({
+    mutationFn: async (order: LabelOrderRecord) => {
+      // label_order_lines cascades on delete (ON DELETE CASCADE) — deleting the
+      // parent row removes its line items too, and only its line items. Product
+      // Orders live in a separate table entirely and are never touched here.
+      const { error } = await supabase.from("label_orders").delete().eq("id", order.id);
+      if (error) throw new Error(error.message);
+      return order;
+    },
+    onSuccess: (order) => {
+      toast.success(`Label Order #${order.order_no} deleted successfully.`);
+      setOrderToDelete(null);
+      void qc.invalidateQueries({ queryKey: ["label_orders"] });
+      void qc.invalidateQueries({ queryKey: ["label_stock"] });
+      void qc.invalidateQueries({ queryKey: ["label_stock_summary"] });
+      void qc.invalidateQueries({ queryKey: ["dashboard_summary"] });
+      void qc.invalidateQueries({ queryKey: ["available_months"] });
+      void qc.invalidateQueries({ queryKey: ["label_order_suggestions"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -430,13 +463,14 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
                 </TableHead>
               ))}
               <TableHead className="text-right">Labels</TableHead>
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
                 <TableCell
-                  colSpan={labelProducts.length + 4}
+                  colSpan={labelProducts.length + 5}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Loading label orders…
@@ -446,7 +480,7 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
             {!isLoading && orders.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={labelProducts.length + 4}
+                  colSpan={labelProducts.length + 5}
                   className="py-12 text-center text-muted-foreground"
                 >
                   No label orders in {monthLabel(month)}.
@@ -471,11 +505,79 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
                 <TableCell className="num text-right font-semibold">
                   {num(o.total_labels)}
                 </TableCell>
+                <TableCell>
+                  <button
+                    type="button"
+                    onClick={() => setOrderToDelete(o)}
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label={`Delete order ${o.order_no}`}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Label Order?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 pt-2 text-sm text-foreground">
+                <p>Are you sure you want to delete this order? This will permanently remove it.</p>
+                {orderToDelete && (
+                  <div className="num space-y-1 rounded-lg bg-secondary p-3">
+                    <DetailRow label="Shop" value={orderToDelete.shops?.shop_name ?? "—"} />
+                    <DetailRow label="Order no" value={`#${orderToDelete.order_no}`} />
+                    <DetailRow label="Order date" value={dateLabel(orderToDelete.order_date)} />
+                    <div className="border-t border-border pt-1">
+                      {labelProducts.map((lp) => {
+                        const qty = sheetsFor(orderToDelete, lp.id);
+                        if (!qty) return null;
+                        return (
+                          <DetailRow
+                            key={lp.id}
+                            label={lp.short_name}
+                            value={`${num(qty)} sheets`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="border-t border-border pt-1">
+                      <DetailRow label="Total labels" value={num(orderToDelete.total_labels)} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (orderToDelete) deleteOrder.mutate(orderToDelete);
+              }}
+              disabled={deleteOrder.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
   );
 }

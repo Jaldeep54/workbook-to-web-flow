@@ -252,3 +252,56 @@ export function getShopSalesPerformance(
 
   return { status, percentageDifference, shopAverage, areaAverage };
 }
+
+/**
+ * Label Order Suggestion
+ *
+ * Klinzo places label print orders only on the 1st and 16th of each month.
+ * Target label stock is 2 months of expected consumption (never 3) plus a
+ * safety buffer that's a percentage of that 2-month requirement. All three
+ * numbers are centralized here and passed straight through to the
+ * label_order_suggestions() RPC, which does the actual forecasting — so
+ * they can be tuned in one place without touching the database function.
+ */
+export const LABEL_ORDER_TARGET_MONTHS = 2;
+export const LABEL_ORDER_SAFETY_BUFFER_PCT = 0.1;
+export const LABEL_ORDER_HISTORY_MONTHS = 6;
+
+export type LabelSuggestionStatus = "emergency" | "order_recommended" | "watch" | "no_order";
+
+const LABEL_SUGGESTION_STATUS_LABEL: Record<LabelSuggestionStatus, string> = {
+  emergency: "Emergency",
+  order_recommended: "Order Recommended",
+  watch: "Watch",
+  no_order: "No Order",
+};
+
+export function labelSuggestionStatusLabel(status: LabelSuggestionStatus): string {
+  return LABEL_SUGGESTION_STATUS_LABEL[status];
+}
+
+/**
+ * Given "today," returns the current planning date (the 1st or 16th at or
+ * before today) and the next procurement date (the other one, coming up
+ * next) as YYYY-MM-DD strings — the same shape monthKey()/dateLabel() use
+ * elsewhere in the app.
+ */
+export function getProcurementDates(today: Date = new Date()): {
+  planningDate: string;
+  nextProcurementDate: string;
+} {
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const day = today.getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const iso = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
+
+  if (day < 16) {
+    return { planningDate: iso(year, month, 1), nextProcurementDate: iso(year, month, 16) };
+  }
+  const nextMonth = new Date(year, month + 1, 1);
+  return {
+    planningDate: iso(year, month, 16),
+    nextProcurementDate: iso(nextMonth.getFullYear(), nextMonth.getMonth(), 1),
+  };
+}

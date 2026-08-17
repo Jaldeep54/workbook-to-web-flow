@@ -230,7 +230,12 @@ export function LabelOrderSuggestionTab({
       for (const lp of labelProducts) {
         rowByLabelProduct.set(
           lp.id,
-          emptyLabelRow(shopId, shop.shop_name, lp, stockByShopLabel.get(cellKey(shopId, lp.id)) ?? 0),
+          emptyLabelRow(
+            shopId,
+            shop.shop_name,
+            lp,
+            stockByShopLabel.get(cellKey(shopId, lp.id)) ?? 0,
+          ),
         );
       }
       byShop.set(shopId, {
@@ -454,9 +459,8 @@ export function LabelOrderSuggestionTab({
         <div>
           <h2 className="text-base font-semibold">Label Order Suggestion</h2>
           <p className="text-xs text-muted-foreground">
-            One consolidated row per shop — every product below its 2-month target, not just the
-            one that went red · Usage average from the last {LABEL_SUGGESTION_HISTORY_MONTHS}{" "}
-            months
+            One consolidated row per shop — every product below its 2-month target, not just the one
+            that went red · Usage average from the last {LABEL_SUGGESTION_HISTORY_MONTHS} months
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setRegenerateOpen(true)}>
@@ -682,7 +686,10 @@ export function LabelOrderSuggestionTab({
                                     <span>{lp.short_name}</span>
                                     {!g.manual && (
                                       <Badge
-                                        className={cn(STATUS_BADGE_CLASS[row.status], "text-[10px]")}
+                                        className={cn(
+                                          STATUS_BADGE_CLASS[row.status],
+                                          "text-[10px]",
+                                        )}
                                       >
                                         {STATUS_DOT[row.status]}{" "}
                                         {labelSuggestionStatusLabel(row.status)}

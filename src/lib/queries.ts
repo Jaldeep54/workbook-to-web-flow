@@ -328,7 +328,10 @@ export type LabelOrderSuggestionRow = {
   daily_rate: number;
   projected_stockout_date: string | null;
   is_emergency: boolean;
+  is_new_shop: boolean;
+  has_stock_data_issue: boolean;
   status: LabelSuggestionStatus;
+  reason: string;
 };
 
 export const labelOrderSuggestionsQuery = (nextProcurementDate: string) =>

@@ -121,20 +121,23 @@ export function ShopAnalysisTab({ shopId }: { shopId: string }) {
 
   const colorMap = buildProductColorMap(data);
   const hasArea = !!data.shop.areaId;
-  const hasOrders = data.productMix.shop.length > 0 || (data.orderFrequency.shop?.orderCount ?? 0) > 0;
+  const hasOrders =
+    data.productMix.shop.length > 0 || (data.orderFrequency.shop?.orderCount ?? 0) > 0;
 
   const salesRows = data.activeProducts.map((p) => ({
     shortName: p.shortName,
     sortOrder: p.sortOrder,
     "This Shop": data.monthlySales.shop?.byProduct.find((r) => r.productId === p.id)?.average ?? 0,
-    "Area Average": data.monthlySales.area?.byProduct.find((r) => r.productId === p.id)?.average ?? 0,
+    "Area Average":
+      data.monthlySales.area?.byProduct.find((r) => r.productId === p.id)?.average ?? 0,
   }));
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          Compared against active shops in <span className="font-medium">{data.shop.areaName ?? "—"}</span>
+          Compared against active shops in{" "}
+          <span className="font-medium">{data.shop.areaName ?? "—"}</span>
         </p>
         <p className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
           Analysis Period: {data.analysisPeriod.label}
@@ -187,7 +190,11 @@ export function ShopAnalysisTab({ shopId }: { shopId: string }) {
                   sub={`${data.orderFrequency.shop.orderCount} orders in period`}
                 />
               ) : (
-                <StatCard label="This shop" value="Insufficient data" sub="At least 2 orders are required" />
+                <StatCard
+                  label="This shop"
+                  value="Insufficient data"
+                  sub="At least 2 orders are required"
+                />
               )}
               {data.orderFrequency.area ? (
                 <StatCard
@@ -222,9 +229,26 @@ export function ShopAnalysisTab({ shopId }: { shopId: string }) {
               <div className="mt-4" style={{ height: Math.max(220, salesRows.length * 48) }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={salesRows} layout="vertical" margin={{ left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
-                    <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} tickFormatter={(v) => inr(v)} />
-                    <YAxis type="category" dataKey="shortName" tickLine={false} axisLine={false} fontSize={12} width={90} />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="var(--color-border)"
+                      horizontal={false}
+                    />
+                    <XAxis
+                      type="number"
+                      tickLine={false}
+                      axisLine={false}
+                      fontSize={12}
+                      tickFormatter={(v) => inr(v)}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="shortName"
+                      tickLine={false}
+                      axisLine={false}
+                      fontSize={12}
+                      width={90}
+                    />
                     <Tooltip formatter={(v: number) => inr(v)} contentStyle={tooltipStyle} />
                     <Legend />
                     <Bar dataKey="This Shop" fill="var(--color-chart-1)" radius={[0, 4, 4, 0]} />

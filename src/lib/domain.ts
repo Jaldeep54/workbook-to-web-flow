@@ -97,10 +97,7 @@ export function sumQty(qtyByProductId: QtyMap): number {
 }
 
 /** Computes every money figure the workbook derived for a delivery row. */
-export function computeDeliveryTotals(
-  qtyByProductId: QtyMap,
-  products: Product[],
-): DeliveryTotals {
+export function computeDeliveryTotals(qtyByProductId: QtyMap, products: Product[]): DeliveryTotals {
   let totalQty = 0;
   let totalSales = 0;
   let labellingCost = 0;
@@ -180,13 +177,7 @@ export function recentMonths(count = 18): string[] {
 export const SHOP_ANALYSIS_MONTHS = 3;
 
 export type SalesPerformanceStatus =
-  | "very_low"
-  | "low"
-  | "good"
-  | "very_good"
-  | "no_area"
-  | "insufficient_area_data"
-  | "no_area_data";
+  "very_low" | "low" | "good" | "very_good" | "no_area" | "insufficient_area_data" | "no_area_data";
 
 export type ShopSalesPerformance = {
   status: SalesPerformanceStatus;
@@ -236,10 +227,20 @@ export function getShopSalesPerformance(
     return { status: "no_area", percentageDifference: null, shopAverage, areaAverage: null };
   }
   if (eligibleAreaShops < 2) {
-    return { status: "insufficient_area_data", percentageDifference: null, shopAverage, areaAverage: null };
+    return {
+      status: "insufficient_area_data",
+      percentageDifference: null,
+      shopAverage,
+      areaAverage: null,
+    };
   }
   if (areaAverage === null || areaAverage === 0) {
-    return { status: "no_area_data", percentageDifference: null, shopAverage, areaAverage: areaAverage ?? 0 };
+    return {
+      status: "no_area_data",
+      percentageDifference: null,
+      shopAverage,
+      areaAverage: areaAverage ?? 0,
+    };
   }
 
   const percentageDifference = ((shopAverage - areaAverage) / areaAverage) * 100;

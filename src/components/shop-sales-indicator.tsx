@@ -3,7 +3,11 @@ import { AlertCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { shopAnalysisQuery } from "@/lib/queries";
-import { getShopSalesPerformance, salesPerformanceLabel, type SalesPerformanceStatus } from "@/lib/domain";
+import {
+  getShopSalesPerformance,
+  salesPerformanceLabel,
+  type SalesPerformanceStatus,
+} from "@/lib/domain";
 import { inr } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -62,10 +66,12 @@ export function ShopSalesIndicator({ shopId }: { shopId: string }) {
       {hasComparison ? (
         <div className="num mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span>
-            Shop avg monthly sales: <span className="font-medium text-foreground">{inr(perf.shopAverage)}</span>
+            Shop avg monthly sales:{" "}
+            <span className="font-medium text-foreground">{inr(perf.shopAverage)}</span>
           </span>
           <span>
-            Area avg monthly sales: <span className="font-medium text-foreground">{inr(perf.areaAverage ?? 0)}</span>
+            Area avg monthly sales:{" "}
+            <span className="font-medium text-foreground">{inr(perf.areaAverage ?? 0)}</span>
           </span>
           <span className="font-medium text-foreground">
             {perf.percentageDifference! >= 0 ? "+" : ""}
@@ -76,7 +82,9 @@ export function ShopSalesIndicator({ shopId }: { shopId: string }) {
       ) : (
         <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
           <AlertCircle className="size-3.5 shrink-0" />
-          {perf.status === "no_area" || perf.status === "insufficient_area_data" || perf.status === "no_area_data"
+          {perf.status === "no_area" ||
+          perf.status === "insufficient_area_data" ||
+          perf.status === "no_area_data"
             ? NO_DATA_MESSAGE[perf.status]
             : null}
         </p>

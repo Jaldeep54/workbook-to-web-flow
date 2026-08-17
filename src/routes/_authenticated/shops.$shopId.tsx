@@ -121,13 +121,17 @@ function ShopDetail() {
       const [orders, deliveries, payments] = await Promise.all([
         supabase
           .from("orders")
-          .select("id, order_no, order_date, delivery_date, status, total_qty, notes, order_lines(product_id, qty)")
+          .select(
+            "id, order_no, order_date, delivery_date, status, total_qty, notes, order_lines(product_id, qty)",
+          )
           .eq("shop_id", shopId)
           .order("order_date", { ascending: false })
           .limit(200),
         supabase
           .from("deliveries")
-          .select("id, order_id, delivery_date, status, total_qty, total_sales, total_fixed_cost, profit")
+          .select(
+            "id, order_id, delivery_date, status, total_qty, total_sales, total_fixed_cost, profit",
+          )
           .eq("shop_id", shopId)
           .order("delivery_date", { ascending: false })
           .limit(200),
@@ -175,7 +179,10 @@ function ShopDetail() {
 
   const markReceived = useMutation({
     mutationFn: async (paymentId: string) => {
-      const { error } = await supabase.from("payments").update({ status: "Received" }).eq("id", paymentId);
+      const { error } = await supabase
+        .from("payments")
+        .update({ status: "Received" })
+        .eq("id", paymentId);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
@@ -261,7 +268,9 @@ function ShopDetail() {
                         {qtyFor(o, p.id) || "—"}
                       </TableCell>
                     ))}
-                    <TableCell className="num text-right font-semibold">{num(o.total_qty)}</TableCell>
+                    <TableCell className="num text-right font-semibold">
+                      {num(o.total_qty)}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {(history.data?.orders ?? []).length === 0 && (
@@ -428,9 +437,9 @@ function ShopDetail() {
             <AlertDialogTitle>Mark this delivery as Delivered?</AlertDialogTitle>
             <AlertDialogDescription>
               This finalizes sales, cost and profit figures for{" "}
-              {deliveringId ? dateLabel(deliveringId.delivery_date) : "this delivery"} and creates or
-              updates its payment record. This mirrors the same delivery workflow used on the Delivery
-              sheet and cannot be easily undone.
+              {deliveringId ? dateLabel(deliveringId.delivery_date) : "this delivery"} and creates
+              or updates its payment record. This mirrors the same delivery workflow used on the
+              Delivery sheet and cannot be easily undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

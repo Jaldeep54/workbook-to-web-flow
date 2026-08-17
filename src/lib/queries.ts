@@ -274,10 +274,13 @@ export const shopAnalysisQuery = (shopId: string, months: number = SHOP_ANALYSIS
   queryOptions({
     queryKey: ["shop_analysis", shopId, months],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("shop_analysis" as never, {
-        p_shop_id: shopId,
-        p_months: months,
-      } as never);
+      const { data, error } = await supabase.rpc(
+        "shop_analysis" as never,
+        {
+          p_shop_id: shopId,
+          p_months: months,
+        } as never,
+      );
       if (error) throw new Error(error.message);
       return data as unknown as ShopAnalysis;
     },

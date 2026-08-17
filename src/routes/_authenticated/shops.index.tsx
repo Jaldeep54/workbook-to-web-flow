@@ -187,6 +187,7 @@ function ShopsPage() {
       void qc.invalidateQueries({ queryKey: ["label_stock"] });
       void qc.invalidateQueries({ queryKey: ["label_stock_summary"] });
       void qc.invalidateQueries({ queryKey: ["shop_image_url"] });
+      void qc.invalidateQueries({ queryKey: ["shop_analysis"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

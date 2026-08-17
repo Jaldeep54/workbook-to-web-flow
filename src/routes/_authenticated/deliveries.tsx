@@ -173,6 +173,8 @@ function DeliveriesPage() {
       void qc.invalidateQueries({ queryKey: ["pending_orders"] });
       void qc.invalidateQueries({ queryKey: ["dashboard_summary"] });
       void qc.invalidateQueries({ queryKey: ["available_months"] });
+      void qc.invalidateQueries({ queryKey: ["shop_history"] });
+      void qc.invalidateQueries({ queryKey: ["shop_analysis"] });
       setMonth(monthKey(deliveryDate));
     },
     onError: (e: Error) => toast.error(e.message),

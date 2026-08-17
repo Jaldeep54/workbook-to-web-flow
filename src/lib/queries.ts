@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { LabelProduct, Product, Shop, ShopArea } from "./domain";
+import { SHOP_ANALYSIS_MONTHS } from "./domain";
 import { getShopImageUrl } from "./shop-image";
 
 function unwrap<T>({ data, error }: { data: T | null; error: { message: string } | null }): T {
@@ -226,3 +227,63 @@ export async function fetchNextShopCode(): Promise<string> {
   if (error) throw new Error(error.message);
   return String(data ?? 1);
 }
+
+/**
+ * Shop Analysis — product mix, order frequency and monthly sales for one shop
+ * versus its Shop Area peers. Backed entirely by the shop_analysis() RPC so the
+ * Shop Analysis tab and the New Order form's Shop Sales Indicator always read
+ * identical numbers (see getShopSalesPerformance in domain.ts for how the
+ * monthlySales figures below turn into a Very Low/Low/Good/Very Good status).
+ */
+export type ShopAnalysisProductRow = {
+  productId: string;
+  shortName: string;
+  sortOrder: number;
+};
+export type ShopAnalysisMixRow = ShopAnalysisProductRow & { qty?: number; sharePct: number };
+export type ShopAnalysisSalesRow = ShopAnalysisProductRow & { average: number };
+
+export type ShopAnalysis = {
+  shop: { id: string; name: string; areaId: string | null; areaName: string | null };
+  analysisPeriod: { months: number; label: string; startDate: string; endDate: string };
+  activeProducts: Array<{
+    id: string;
+    key: string;
+    name: string;
+    shortName: string;
+    sortOrder: number;
+  }>;
+  productMix: {
+    shop: ShopAnalysisMixRow[];
+    shopTotalQty: number;
+    area: ShopAnalysisMixRow[];
+    areaEligibleShops: number;
+  };
+  orderFrequency: {
+    shop: { avgDays: number; orderCount: number } | null;
+    area: { avgDays: number; eligibleShops: number } | null;
+  };
+  monthlySales: {
+    shop: { average: number; activeMonths: number; byProduct: ShopAnalysisSalesRow[] } | null;
+    area: { average: number; eligibleShops: number; byProduct: ShopAnalysisSalesRow[] } | null;
+    areaEligibleShopCount: number;
+  };
+};
+
+export const shopAnalysisQuery = (shopId: string, months: number = SHOP_ANALYSIS_MONTHS) =>
+  queryOptions({
+    queryKey: ["shop_analysis", shopId, months],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(
+        "shop_analysis" as never,
+        {
+          p_shop_id: shopId,
+          p_months: months,
+        } as never,
+      );
+      if (error) throw new Error(error.message);
+      return data as unknown as ShopAnalysis;
+    },
+    enabled: !!shopId,
+    staleTime: 60 * 1000,
+  });

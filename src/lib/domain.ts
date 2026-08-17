@@ -270,10 +270,10 @@ export const LABEL_ORDER_HISTORY_MONTHS = 6;
 export type LabelSuggestionStatus = "emergency" | "order_recommended" | "watch" | "no_order";
 
 const LABEL_SUGGESTION_STATUS_LABEL: Record<LabelSuggestionStatus, string> = {
-  emergency: "Emergency",
+  emergency: "Urgent",
   order_recommended: "Order Recommended",
   watch: "Watch",
-  no_order: "No Order",
+  no_order: "No Action",
 };
 
 export function labelSuggestionStatusLabel(status: LabelSuggestionStatus): string {

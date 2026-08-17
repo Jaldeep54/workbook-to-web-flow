@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -45,7 +44,7 @@ import {
 } from "@/lib/queries";
 import { nextOrderNo } from "@/lib/records";
 import {
-  getProcurementDates,
+  LABEL_SUGGESTION_HISTORY_MONTHS,
   labelSuggestionStatusLabel,
   labelsFromSheets,
   monthKey,
@@ -56,24 +55,24 @@ import { shopLabel } from "@/components/filter-bar";
 import { cn } from "@/lib/utils";
 
 const STATUS_RANK: Record<LabelSuggestionStatus, number> = {
-  emergency: 0,
-  order_recommended: 1,
-  watch: 2,
-  no_order: 3,
+  urgent: 0,
+  recommended: 1,
+  monitor: 2,
+  no_order_required: 3,
 };
 
 const STATUS_DOT: Record<LabelSuggestionStatus, string> = {
-  emergency: "🔴",
-  order_recommended: "🟠",
-  watch: "🟡",
-  no_order: "🟢",
+  urgent: "🔴",
+  recommended: "🟠",
+  monitor: "🟡",
+  no_order_required: "🟢",
 };
 
 const STATUS_BADGE_CLASS: Record<LabelSuggestionStatus, string> = {
-  emergency: "border-transparent bg-destructive text-destructive-foreground",
-  order_recommended: "border-transparent bg-warning text-warning-foreground",
-  watch: "border-transparent bg-secondary text-secondary-foreground",
-  no_order: "border-transparent bg-muted text-muted-foreground",
+  urgent: "border-transparent bg-destructive text-destructive-foreground",
+  recommended: "border-transparent bg-warning text-warning-foreground",
+  monitor: "border-transparent bg-secondary text-secondary-foreground",
+  no_order_required: "border-transparent bg-muted text-muted-foreground",
 };
 
 type ShopGroup = {
@@ -82,26 +81,34 @@ type ShopGroup = {
   shopCode: string;
   rollupStatus: LabelSuggestionStatus;
   rowByLabelProduct: Map<string, LabelOrderSuggestionRow>;
-  /** Added by the user via "Add shop" — not a system suggestion, always shown, always selectable. */
+  /** Added by the user via "Add a shop manually" — not a system suggestion, always shown. */
   manual: boolean;
 };
 
 const cellKey = (shopId: string, labelProductId: string) => `${shopId}:${labelProductId}`;
 
-/**
- * Within the same priority bucket, shops projected to need labels sooner
- * should sort first — the earliest projected_stockout_date across the
- * shop's label types, or +Infinity if none of them project one.
- */
-const soonestUrgencyMs = (g: ShopGroup): number => {
-  let soonest = Infinity;
-  for (const row of g.rowByLabelProduct.values()) {
-    if (!row.projected_stockout_date) continue;
-    const ms = new Date(row.projected_stockout_date).getTime();
-    if (ms < soonest) soonest = ms;
+/** Plain-language explanation for the breakdown panel's "Why?" section. */
+function reasonFor(row: LabelOrderSuggestionRow): string {
+  let base: string;
+  switch (row.status) {
+    case "urgent":
+      base = "Current stock is below the low stock threshold.";
+      break;
+    case "recommended":
+      base = "Current stock is below the 1-month target.";
+      break;
+    case "monitor":
+      base = "Current stock is below the 2-month target.";
+      break;
+    default:
+      base = "Current stock meets the 2-month target.";
   }
-  return soonest;
-};
+  if (row.has_stock_data_issue) {
+    base +=
+      " Stock data issue: recorded stock is negative (test data) — treated as zero for this recommendation.";
+  }
+  return base;
+}
 
 const emptyLabelRow = (
   shopId: string,
@@ -115,6 +122,7 @@ const emptyLabelRow = (
     product_id: string;
     labels_per_sheet: number;
     sheet_cost: number;
+    low_stock_threshold: number;
   },
   currentStock: number,
 ): LabelOrderSuggestionRow => ({
@@ -129,25 +137,16 @@ const emptyLabelRow = (
   product_id: labelProduct.product_id,
   labels_per_sheet: labelProduct.labels_per_sheet,
   sheet_cost: labelProduct.sheet_cost,
+  low_stock_threshold: labelProduct.low_stock_threshold,
   current_stock: currentStock,
-  months_of_history: 0,
-  has_limited_history: true,
-  monthly_forecast: 0,
-  recent_avg: null,
-  baseline_avg: null,
-  is_growth: false,
-  two_month_requirement: 0,
-  safety_buffer: 0,
-  target_stock: 0,
-  additional_requirement: 0,
+  has_stock_data_issue: currentStock < 0,
+  avg_monthly_usage: 0,
+  one_month_target: labelProduct.low_stock_threshold,
+  two_month_target: labelProduct.low_stock_threshold,
+  additional_required: 0,
   suggested_sheets: 0,
-  daily_rate: 0,
-  projected_stockout_date: null,
-  is_emergency: false,
-  is_new_shop: false,
-  has_stock_data_issue: false,
-  status: "no_order",
-  reason: "Manually added — enter the quantities to order for this shop.",
+  expected_stock_after_order: currentStock,
+  status: "no_order_required",
 });
 
 /**
@@ -164,15 +163,10 @@ export function LabelOrderSuggestionTab({
   onOrdersPlaced?: (month: string) => void;
 }) {
   const qc = useQueryClient();
-  const { planningDate, nextProcurementDate } = useMemo(() => getProcurementDates(), []);
   const { data: labelProducts = [] } = useQuery(labelProductsQuery);
   const { data: shops = [] } = useQuery(shopsQuery);
   const { data: labelStock = [] } = useQuery(labelStockQuery);
-  const {
-    data: rows = [],
-    isLoading,
-    refetch,
-  } = useQuery(labelOrderSuggestionsQuery(nextProcurementDate));
+  const { data: rows = [], isLoading, refetch } = useQuery(labelOrderSuggestionsQuery);
 
   // Only ever populated by explicit user action — never overwritten by a refetch,
   // only cleared via the confirmed "Regenerate Suggestions" action.
@@ -180,7 +174,6 @@ export function LabelOrderSuggestionTab({
   const [includeOverride, setIncludeOverride] = useState<Record<string, boolean>>({});
   const [manualShopIds, setManualShopIds] = useState<string[]>([]);
   const [addShopValue, setAddShopValue] = useState("");
-  const [showWatch, setShowWatch] = useState(false);
   const [expandedShop, setExpandedShop] = useState<string | null>(null);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [placeOpen, setPlaceOpen] = useState(false);
@@ -192,6 +185,14 @@ export function LabelOrderSuggestionTab({
     return m;
   }, [labelStock]);
 
+  // Shop-level status is deliberately NOT "the worst individual product status" —
+  // a red/urgent product is only the trigger to review the whole shop. Once
+  // triggered (or even without an urgent trigger), every product the shop
+  // carries that's below ITS OWN 2-month target belongs in one consolidated
+  // recommendation, so the printer only has to visit each shop once:
+  //   any product below its low-stock threshold      -> shop is Urgent
+  //   else any product below its 2-month target       -> shop is Recommended
+  //   else (every product at/above its 2-month target) -> shop is No Order Required
   const groups: ShopGroup[] = useMemo(() => {
     const byShop = new Map<string, ShopGroup>();
     for (const r of rows) {
@@ -201,15 +202,26 @@ export function LabelOrderSuggestionTab({
           shopId: r.shop_id,
           shopName: r.shop_name,
           shopCode: r.shop_code,
-          rollupStatus: "no_order",
+          rollupStatus: "no_order_required",
           rowByLabelProduct: new Map(),
           manual: false,
         };
         byShop.set(r.shop_id, g);
       }
       g.rowByLabelProduct.set(r.label_product_id, r);
-      if (STATUS_RANK[r.status] < STATUS_RANK[g.rollupStatus]) g.rollupStatus = r.status;
     }
+    for (const g of byShop.values()) {
+      const products = Array.from(g.rowByLabelProduct.values());
+      const hasUrgent = products.some((r) => r.status === "urgent");
+      const hasBelowTwoMonthTarget = products.some((r) => r.status !== "no_order_required");
+      g.rollupStatus = hasUrgent
+        ? "urgent"
+        : hasBelowTwoMonthTarget
+          ? "recommended"
+          : "no_order_required";
+    }
+    // Shops added via "Add a shop manually" that the system didn't already
+    // flag — synthesized as empty, editable rows for every label product.
     for (const shopId of manualShopIds) {
       if (byShop.has(shopId)) continue; // already a real suggestion — don't shadow it
       const shop = shops.find((s) => s.id === shopId);
@@ -230,7 +242,7 @@ export function LabelOrderSuggestionTab({
         shopId,
         shopName: shop.shop_name,
         shopCode: shop.code,
-        rollupStatus: "no_order",
+        rollupStatus: "no_order_required",
         rowByLabelProduct,
         manual: true,
       });
@@ -239,39 +251,30 @@ export function LabelOrderSuggestionTab({
       (a, b) =>
         Number(a.manual) - Number(b.manual) ||
         STATUS_RANK[a.rollupStatus] - STATUS_RANK[b.rollupStatus] ||
-        soonestUrgencyMs(a) - soonestUrgencyMs(b) ||
         a.shopName.localeCompare(b.shopName),
     );
   }, [rows, manualShopIds, shops, labelProducts, stockByShopLabel]);
 
+  // No-order shops are never shown (unless manually added) — everything
+  // visible needs action.
   const visibleGroups = useMemo(
-    () =>
-      groups.filter(
-        (g) =>
-          g.manual ||
-          g.rollupStatus === "emergency" ||
-          g.rollupStatus === "order_recommended" ||
-          (showWatch && g.rollupStatus === "watch"),
-      ),
-    [groups, showWatch],
+    () => groups.filter((g) => g.manual || g.rollupStatus !== "no_order_required"),
+    [groups],
   );
 
   const suggestionGroups = useMemo(() => visibleGroups.filter((g) => !g.manual), [visibleGroups]);
 
-  const shopTypeLabel = (g: ShopGroup) => {
-    if (g.manual) return "Manual";
-    for (const row of g.rowByLabelProduct.values()) {
-      if (row.is_new_shop && row.status === "order_recommended") return "Initial Order";
-    }
-    return "Recurring";
-  };
-
-  const isIncluded = (g: ShopGroup) =>
-    includeOverride[g.shopId] ??
-    (g.manual || g.rollupStatus === "emergency" || g.rollupStatus === "order_recommended");
+  const isIncluded = (g: ShopGroup) => includeOverride[g.shopId] ?? true;
 
   const finalQty = (row: LabelOrderSuggestionRow) =>
     edited[cellKey(row.shop_id, row.label_product_id)] ?? row.suggested_sheets;
+
+  const addableShops = useMemo(() => {
+    const present = new Set(groups.map((g) => g.shopId));
+    return shops
+      .filter((s) => s.is_active && !present.has(s.id))
+      .sort((a, b) => a.shop_name.localeCompare(b.shop_name));
+  }, [groups, shops]);
 
   const totals = useMemo(() => {
     let recommendedSheets = 0;
@@ -287,7 +290,8 @@ export function LabelOrderSuggestionTab({
     let labels = 0;
     let sheetCost = 0;
     for (const g of visibleGroups) {
-      if (!isIncluded(g)) continue;
+      const included = includeOverride[g.shopId] ?? true;
+      if (!included) continue;
       selectedSuggestions += 1;
       for (const lp of labelProducts) {
         const row = g.rowByLabelProduct.get(lp.id);
@@ -311,7 +315,6 @@ export function LabelOrderSuggestionTab({
       orderCharges,
       total: sheetCost + orderCharges,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleGroups, suggestionGroups, labelProducts, edited, includeOverride]);
 
   const selectAll = () =>
@@ -334,7 +337,7 @@ export function LabelOrderSuggestionTab({
       for (const g of visibleGroups) {
         next[g.shopId] = g.manual
           ? (prev[g.shopId] ?? true)
-          : g.rollupStatus === "emergency" || g.rollupStatus === "order_recommended";
+          : g.rollupStatus === "urgent" || g.rollupStatus === "recommended";
       }
       return next;
     });
@@ -342,17 +345,11 @@ export function LabelOrderSuggestionTab({
   const regenerate = () => {
     setEdited({});
     setIncludeOverride({});
+    setManualShopIds([]);
     void refetch();
     setRegenerateOpen(false);
     toast.success("Suggestions regenerated");
   };
-
-  const addableShops = useMemo(() => {
-    const present = new Set(groups.map((g) => g.shopId));
-    return shops
-      .filter((s) => s.is_active && !present.has(s.id))
-      .sort((a, b) => a.shop_name.localeCompare(b.shop_name));
-  }, [groups, shops]);
 
   const openPlaceOrders = () => {
     setOrderDate(todayISO());
@@ -462,21 +459,13 @@ export function LabelOrderSuggestionTab({
         <div>
           <h2 className="text-base font-semibold">Label Order Suggestion</h2>
           <p className="text-xs text-muted-foreground">
-            Planning date: {dateLabel(planningDate)} · Next procurement:{" "}
-            {dateLabel(nextProcurementDate)}
+            One consolidated row per shop — every product below its 2-month target, not just the one
+            that went red · Usage average from the last {LABEL_SUGGESTION_HISTORY_MONTHS} months
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Switch id="show-watch" checked={showWatch} onCheckedChange={setShowWatch} />
-            <Label htmlFor="show-watch" className="text-xs">
-              Show Watch items
-            </Label>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setRegenerateOpen(true)}>
-            <RotateCcw className="size-4" /> Regenerate Suggestions
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => setRegenerateOpen(true)}>
+          <RotateCcw className="size-4" /> Regenerate Suggestions
+        </Button>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
@@ -507,29 +496,27 @@ export function LabelOrderSuggestionTab({
             {totals.selectedSuggestions} of {visibleGroups.length} selected
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <Select
-            value={addShopValue}
-            onValueChange={(v) => {
-              setManualShopIds((prev) => (prev.includes(v) ? prev : [...prev, v]));
-              setAddShopValue("");
-            }}
-          >
-            <SelectTrigger className="w-[240px] bg-card">
-              <SelectValue placeholder="+ Add a shop manually" />
-            </SelectTrigger>
-            <SelectContent>
-              {addableShops.length === 0 && (
-                <div className="px-2 py-1.5 text-xs text-muted-foreground">No other shops</div>
-              )}
-              {addableShops.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {shopLabel(s.shop_name, s.label_name)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Select
+          value={addShopValue}
+          onValueChange={(v) => {
+            setManualShopIds((prev) => (prev.includes(v) ? prev : [...prev, v]));
+            setAddShopValue("");
+          }}
+        >
+          <SelectTrigger className="w-[240px] bg-card">
+            <SelectValue placeholder="+ Add a shop manually" />
+          </SelectTrigger>
+          <SelectContent>
+            {addableShops.length === 0 && (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">No other shops</div>
+            )}
+            {addableShops.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {shopLabel(s.shop_name, s.label_name)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="surface-card overflow-hidden">
@@ -540,7 +527,6 @@ export function LabelOrderSuggestionTab({
                 <TableHead className="w-10"></TableHead>
                 <TableHead className="w-10"></TableHead>
                 <TableHead>Shop</TableHead>
-                <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 {labelProducts.map((lp) => (
                   <TableHead key={lp.id} className="text-right">
@@ -616,9 +602,6 @@ export function LabelOrderSuggestionTab({
                             ⚠
                           </span>
                         )}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {shopTypeLabel(g)}
                       </TableCell>
                       <TableCell>
                         {g.manual ? (
@@ -713,22 +696,26 @@ export function LabelOrderSuggestionTab({
                                       </Badge>
                                     )}
                                   </p>
-                                  <p className="mb-2 text-foreground">{row.reason}</p>
+                                  <p className="mb-2 text-foreground">
+                                    {g.manual
+                                      ? "Manually added — enter the quantities to order for this shop."
+                                      : reasonFor(row)}
+                                  </p>
                                   <div className="num space-y-0.5 text-muted-foreground">
                                     <Row label="Current stock" value={num(row.current_stock)} />
                                     <Row
-                                      label="Monthly consumption"
-                                      value={`${num(row.monthly_forecast)}${row.has_limited_history ? " (limited history)" : ""}`}
+                                      label="Low stock threshold"
+                                      value={num(row.low_stock_threshold)}
                                     />
                                     <Row
-                                      label="2-month requirement"
-                                      value={num(row.two_month_requirement)}
+                                      label="Avg monthly usage"
+                                      value={num(row.avg_monthly_usage)}
                                     />
-                                    <Row label="Safety buffer" value={num(row.safety_buffer)} />
-                                    <Row label="Target" value={num(row.target_stock)} />
+                                    <Row label="1-month target" value={num(row.one_month_target)} />
+                                    <Row label="2-month target" value={num(row.two_month_target)} />
                                     <Row
-                                      label="Additional requirement"
-                                      value={num(row.additional_requirement)}
+                                      label="Additional required"
+                                      value={num(row.additional_required)}
                                     />
                                     <Row
                                       label="Labels per sheet"
@@ -738,15 +725,10 @@ export function LabelOrderSuggestionTab({
                                       label="Suggested"
                                       value={`${num(row.suggested_sheets)} sheets`}
                                     />
-                                    {row.is_growth && (
-                                      <Row label="Trend" value="High growth in recent orders" />
-                                    )}
-                                    {row.is_emergency && row.projected_stockout_date && (
-                                      <Row
-                                        label="Projected stockout"
-                                        value={dateLabel(row.projected_stockout_date)}
-                                      />
-                                    )}
+                                    <Row
+                                      label="Stock after order"
+                                      value={num(row.expected_stock_after_order)}
+                                    />
                                   </div>
                                 </div>
                               );

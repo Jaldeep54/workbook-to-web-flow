@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { AlertTriangle, Download, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Download, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
@@ -263,6 +263,7 @@ function StockDashboard() {
 function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string) => void }) {
   const qc = useQueryClient();
   const [shopFilter, setShopFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("");
   const [open, setOpen] = useState(false);
   const [shopId, setShopId] = useState("");
   const [orderDate, setOrderDate] = useState(todayISO());
@@ -270,7 +271,21 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
   const [orderToDelete, setOrderToDelete] = useState<LabelOrderRecord | null>(null);
 
   const { data: labelProducts = [] } = useQuery(labelProductsQuery);
-  const { data: orders = [], isLoading } = useQuery(labelOrdersQuery(month, shopFilter));
+  const { data: monthOrders = [], isLoading } = useQuery(labelOrdersQuery(month, shopFilter));
+
+  // "Date" mode narrows the month's results to a single day, client-side —
+  // no new backend query, the month's orders are already loaded.
+  const orders = dateFilter ? monthOrders.filter((o) => o.order_date === dateFilter) : monthOrders;
+
+  // Per-product sheet totals across every order currently shown (respecting
+  // whatever month/date/shop filter is active) — not the "new order" draft.
+  const sheetTotals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const line of orders.flatMap((o) => o.label_order_lines)) {
+      map.set(line.label_product_id, (map.get(line.label_product_id) ?? 0) + Number(line.sheets));
+    }
+    return map;
+  }, [orders]);
 
   const totals = labelProducts.reduce(
     (acc, lp) => {
@@ -355,12 +370,32 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
     <>
       <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
         <MonthPicker value={month} onChange={setMonth} />
+        <div className="flex items-center gap-1">
+          <Input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="w-[150px] bg-card"
+            aria-label="Filter to a single date"
+          />
+          {dateFilter && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-9"
+              onClick={() => setDateFilter("")}
+              aria-label="Clear date filter"
+            >
+              <X className="size-4" />
+            </Button>
+          )}
+        </div>
         <ShopFilter value={shopFilter} onChange={setShopFilter} />
         <Button
           variant="outline"
           onClick={() =>
             downloadCsv(
-              `klinzo-label-orders-${month}`,
+              `klinzo-label-orders-${dateFilter || month}`,
               orders.map((o) => ({
                 Date: o.order_date ?? "",
                 Shop: o.shops?.shop_name ?? "",
@@ -450,6 +485,17 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
         </Dialog>
       </div>
 
+      <div className="mb-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {labelProducts.map((lp) => (
+          <StatCard
+            key={lp.id}
+            label={`${lp.short_name} sheets`}
+            value={num(sheetTotals.get(lp.id) ?? 0)}
+            sub={dateFilter ? dateLabel(dateFilter) : monthLabel(month)}
+          />
+        ))}
+      </div>
+
       <div className="surface-card overflow-x-auto">
         <Table>
           <TableHeader>
@@ -483,7 +529,7 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
                   colSpan={labelProducts.length + 5}
                   className="py-12 text-center text-muted-foreground"
                 >
-                  No label orders in {monthLabel(month)}.
+                  No label orders {dateFilter ? `on ${dateLabel(dateFilter)}` : `in ${monthLabel(month)}`}.
                 </TableCell>
               </TableRow>
             )}

@@ -71,7 +71,7 @@ function PaymentsPage() {
       patch,
     }: {
       id: string;
-      patch: { status?: string; collected_by?: string | null };
+      patch: { status?: string; collected_by?: string | null; collected_date?: string | null };
     }) => {
       const { error } = await supabase.from("payments").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
@@ -112,6 +112,7 @@ function PaymentsPage() {
                     "Order no": p.orders?.order_no ?? "",
                     Status: p.status ?? "",
                     "Collected by": p.collected_by ?? "",
+                    "Date of collection": p.collected_date ?? "",
                     Amount: p.amount,
                   })),
                 )
@@ -148,19 +149,20 @@ function PaymentsPage() {
               <TableHead className="text-right">Amount</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Collected by</TableHead>
+              <TableHead>Date of collection</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                   Loading payments…
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && payments.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
                   No payments in {monthLabel(month)}. Mark orders delivered on the delivery sheet to
                   raise payments.
                 </TableCell>
@@ -204,6 +206,19 @@ function PaymentsPage() {
                       const value = e.target.value.trim();
                       if (value !== (p.collected_by ?? "")) {
                         update.mutate({ id: p.id, patch: { collected_by: value || null } });
+                      }
+                    }}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="date"
+                    defaultValue={p.collected_date ?? ""}
+                    className="w-[150px]"
+                    onBlur={(e) => {
+                      const value = e.target.value;
+                      if (value !== (p.collected_date ?? "")) {
+                        update.mutate({ id: p.id, patch: { collected_date: value || null } });
                       }
                     }}
                   />

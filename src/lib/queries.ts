@@ -102,6 +102,42 @@ export const summaryQuery = (month: string) =>
     },
   });
 
+/**
+ * Area-scoped sibling of dashboard_summary — same fields, plus a 3-month
+ * sales trend, a product revenue-share breakdown for the month, and the
+ * area's (or whole business's) top 5 shops by sales. Used by the Overview
+ * page once a Shop Area is selected via ShopAreaFilter; areaId null/"all"
+ * behaves identically to summaryQuery (whole business).
+ */
+export type DashboardSummaryByArea = DashboardSummary & {
+  areaId: string | null;
+  monthlySales: Array<{ month: string; totalSales: number }>;
+  productMix: Array<{
+    productId: string;
+    shortName: string;
+    sortOrder: number;
+    amount: number;
+    sharePct: number;
+  }>;
+  topShops: Array<{ shopId: string; shopName: string; sales: number }>;
+};
+
+export const summaryByAreaQuery = (month: string, areaId: string | "all") =>
+  queryOptions({
+    queryKey: ["dashboard_summary_by_area", month, areaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(
+        "dashboard_summary_by_area" as never,
+        {
+          p_month: month,
+          p_area_id: areaId === "all" ? null : areaId,
+        } as never,
+      );
+      if (error) throw new Error(error.message);
+      return data as unknown as DashboardSummaryByArea;
+    },
+  });
+
 export type LabelStockRow = {
   shop_id: string;
   shop_name: string;
@@ -147,6 +183,67 @@ export const labelStockSummaryQuery = queryOptions({
       .order("shop_name");
     if (error) throw new Error(error.message);
     return (data ?? []) as unknown as ShopLabelSummary[];
+  },
+});
+
+/**
+ * Cash Position — all-time totals (never scoped to a month) behind one RPC,
+ * same reasoning as dashboard_summary()/shop_analysis(): a single source of
+ * truth instead of pulling every payment/cost/investment/payout row into the
+ * browser to sum client-side.
+ */
+export type CashPositionSummary = {
+  investmentsTotal: number;
+  investmentsByBhavin: number;
+  investmentsByJaldeep: number;
+  paymentsReceivedTotal: number;
+  variableCostsTotal: number;
+  payoutsTotal: number;
+};
+
+export const cashPositionSummaryQuery = queryOptions({
+  queryKey: ["cash_position_summary"],
+  queryFn: async () => {
+    const { data, error } = await supabase.rpc("cash_position_summary" as never);
+    if (error) throw new Error(error.message);
+    return data as unknown as CashPositionSummary;
+  },
+});
+
+export type MoneyMovement = {
+  id: string;
+  amount: number;
+  done_by: "Bhavin" | "Jaldeep";
+  created_at: string;
+};
+
+export type InvestmentRow = MoneyMovement & { investment_date: string };
+
+export const investmentsQuery = queryOptions({
+  queryKey: ["investments"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("investments" as never)
+      .select("id, investment_date, amount, done_by, created_at")
+      .order("investment_date", { ascending: false })
+      .limit(1000);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as unknown as InvestmentRow[];
+  },
+});
+
+export type PayoutRow = MoneyMovement & { payout_date: string };
+
+export const payoutsQuery = queryOptions({
+  queryKey: ["payouts"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("payouts" as never)
+      .select("id, payout_date, amount, done_by, created_at")
+      .order("payout_date", { ascending: false })
+      .limit(1000);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as unknown as PayoutRow[];
   },
 });
 

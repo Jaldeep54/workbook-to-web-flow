@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedCashPositionRouteImport } from './routes/_authenticated/cash-position'
 import { Route as AuthenticatedCostsRouteImport } from './routes/_authenticated/costs'
 import { Route as AuthenticatedDeliveriesRouteImport } from './routes/_authenticated/deliveries'
 import { Route as AuthenticatedDeliverySheetRouteImport } from './routes/_authenticated/delivery-sheet'
@@ -40,6 +41,12 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCashPositionRoute =
+  AuthenticatedCashPositionRouteImport.update({
+    id: '/cash-position',
+    path: '/cash-position',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedCostsRoute = AuthenticatedCostsRouteImport.update({
   id: '/costs',
   path: '/costs',
@@ -112,6 +119,7 @@ const AuthenticatedShopsMapRoute = AuthenticatedShopsMapRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/cash-position': typeof AuthenticatedCashPositionRoute
   '/costs': typeof AuthenticatedCostsRoute
   '/deliveries': typeof AuthenticatedDeliveriesRoute
   '/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
@@ -128,6 +136,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/cash-position': typeof AuthenticatedCashPositionRoute
   '/costs': typeof AuthenticatedCostsRoute
   '/deliveries': typeof AuthenticatedDeliveriesRoute
   '/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
@@ -147,6 +156,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/cash-position': typeof AuthenticatedCashPositionRoute
   '/_authenticated/costs': typeof AuthenticatedCostsRoute
   '/_authenticated/deliveries': typeof AuthenticatedDeliveriesRoute
   '/_authenticated/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
@@ -167,6 +177,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/cash-position'
     | '/costs'
     | '/deliveries'
     | '/delivery-sheet'
@@ -183,6 +194,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
+    | '/cash-position'
     | '/costs'
     | '/deliveries'
     | '/delivery-sheet'
@@ -201,6 +213,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/cash-position'
     | '/_authenticated/costs'
     | '/_authenticated/deliveries'
     | '/_authenticated/delivery-sheet'
@@ -243,6 +256,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/cash-position': {
+      id: '/_authenticated/cash-position'
+      path: '/cash-position'
+      fullPath: '/cash-position'
+      preLoaderRoute: typeof AuthenticatedCashPositionRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/costs': {
@@ -340,6 +360,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedCashPositionRoute: typeof AuthenticatedCashPositionRoute
   AuthenticatedCostsRoute: typeof AuthenticatedCostsRoute
   AuthenticatedDeliveriesRoute: typeof AuthenticatedDeliveriesRoute
   AuthenticatedDeliverySheetRoute: typeof AuthenticatedDeliverySheetRoute
@@ -357,6 +378,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedCashPositionRoute: AuthenticatedCashPositionRoute,
   AuthenticatedCostsRoute: AuthenticatedCostsRoute,
   AuthenticatedDeliveriesRoute: AuthenticatedDeliveriesRoute,
   AuthenticatedDeliverySheetRoute: AuthenticatedDeliverySheetRoute,

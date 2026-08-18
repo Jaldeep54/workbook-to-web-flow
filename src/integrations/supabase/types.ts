@@ -140,6 +140,30 @@ export type Database = {
           },
         ]
       }
+      investments: {
+        Row: {
+          amount: number
+          created_at: string
+          done_by: string
+          id: string
+          investment_date: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          done_by: string
+          id?: string
+          investment_date: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          done_by?: string
+          id?: string
+          investment_date?: string
+        }
+        Relationships: []
+      }
       label_order_lines: {
         Row: {
           id: string
@@ -402,10 +426,35 @@ export type Database = {
           },
         ]
       }
+      payouts: {
+        Row: {
+          amount: number
+          created_at: string
+          done_by: string
+          id: string
+          payout_date: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          done_by: string
+          id?: string
+          payout_date: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          done_by?: string
+          id?: string
+          payout_date?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number
           collected_by: string | null
+          collected_date: string | null
           created_at: string
           id: string
           month: string | null
@@ -418,6 +467,7 @@ export type Database = {
         Insert: {
           amount?: number
           collected_by?: string | null
+          collected_date?: string | null
           created_at?: string
           id?: string
           month?: string | null
@@ -430,6 +480,7 @@ export type Database = {
         Update: {
           amount?: number
           collected_by?: string | null
+          collected_date?: string | null
           created_at?: string
           id?: string
           month?: string | null
@@ -622,6 +673,7 @@ export type Database = {
         Row: {
           address: string | null
           area_id: string | null
+          bill_name: string | null
           code: string
           created_at: string
           design_type: number
@@ -641,6 +693,7 @@ export type Database = {
         Insert: {
           address?: string | null
           area_id?: string | null
+          bill_name?: string | null
           code: string
           created_at?: string
           design_type?: number
@@ -660,6 +713,7 @@ export type Database = {
         Update: {
           address?: string | null
           area_id?: string | null
+          bill_name?: string | null
           code?: string
           created_at?: string
           design_type?: number
@@ -792,7 +846,12 @@ export type Database = {
           month: string
         }[]
       }
+      cash_position_summary: { Args: never; Returns: Json }
       dashboard_summary: { Args: { p_month: string }; Returns: Json }
+      dashboard_summary_by_area: {
+        Args: { p_area_id?: string | null; p_month: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

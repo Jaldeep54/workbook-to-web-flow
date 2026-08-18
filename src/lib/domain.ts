@@ -50,6 +50,8 @@ export type Shop = {
   folder_name: string | null;
   shop_name: string;
   label_name: string | null;
+  /** Name printed on invoices/delivery challans — falls back to shop_name when unset. */
+  bill_name: string | null;
   design_type: number;
   area_id: string | null;
   image_path: string | null;
@@ -142,7 +144,11 @@ export function googleMapsDirectionsUrl(latitude: number, longitude: number): st
 export const DELIVERY_STATUSES = ["Pending", "Delivered", "Cancelled"] as const;
 export const ORDER_STATUSES = ["Pending", "Delivered", "Cancelled"] as const;
 export const PAYMENT_STATUSES = ["Pending", "Received", "Partial"] as const;
-export const COST_TYPES = ["Transportation", "Others"] as const;
+export const COST_TYPES = ["Transportation", "Label Cost", "Others"] as const;
+
+/** Cash Position: the only two people who record investments/payouts. */
+export const CASH_POSITION_PEOPLE = ["Bhavin", "Jaldeep"] as const;
+export type CashPositionPerson = (typeof CASH_POSITION_PEOPLE)[number];
 
 export function monthKey(date: string | Date): string {
   const d = typeof date === "string" ? new Date(date) : date;

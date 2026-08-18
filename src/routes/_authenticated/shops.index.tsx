@@ -74,6 +74,7 @@ const emptyShop = {
   folder_name: "",
   shop_name: "",
   label_name: "",
+  bill_name: "",
   design_type: 1,
   area_id: null as string | null,
   address: "",
@@ -242,6 +243,7 @@ function ShopsPage() {
       folder_name: shop.folder_name ?? "",
       shop_name: shop.shop_name,
       label_name: shop.label_name ?? "",
+      bill_name: shop.bill_name ?? "",
       design_type: shop.design_type,
       area_id: shop.area_id,
       address: shop.address ?? "",
@@ -271,6 +273,7 @@ function ShopsPage() {
                     Code: s.code,
                     Shop: s.shop_name,
                     "Label name": s.label_name ?? "",
+                    "Bill name": s.bill_name ?? "",
                     Area: areaName(s.area_id),
                     Design: s.design_type,
                     Mobile: s.mobile ?? "",
@@ -336,6 +339,11 @@ function ShopsPage() {
                 label="Label name"
                 value={form.label_name}
                 onChange={(v) => setForm({ ...form, label_name: v })}
+              />
+              <Field
+                label="Bill name"
+                value={form.bill_name}
+                onChange={(v) => setForm({ ...form, bill_name: v })}
               />
               <Field
                 label="Design type"
@@ -598,6 +606,7 @@ function ShopDetailsDialog({
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <Detail label="Shop area" value={areaName} />
               <Detail label="Label name" value={shop.label_name ?? "—"} />
+              <Detail label="Bill name" value={shop.bill_name ?? "—"} />
               <Detail label="Mobile" value={shop.mobile ?? "—"} />
               <Detail label="Handled by" value={shop.handled_by ?? "—"} />
               <Detail label="Design type" value={String(shop.design_type)} />

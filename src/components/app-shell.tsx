@@ -3,7 +3,6 @@ import {
   BarChart3,
   Boxes,
   CreditCard,
-  FileSpreadsheet,
   LayoutDashboard,
   LogOut,
   Receipt,
@@ -15,6 +14,7 @@ import {
   Lightbulb,
   Menu,
   MapPin,
+  Wallet,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -34,8 +34,8 @@ const NAV = [
   { to: "/payments", label: "Payments", icon: CreditCard },
   { to: "/labels", label: "Labels & stock", icon: Boxes },
   { to: "/costs", label: "Variable costs", icon: Receipt },
+  { to: "/cash-position", label: "Cash Position", icon: Wallet },
   { to: "/reports", label: "Reports", icon: BarChart3 },
-  { to: "/import", label: "Excel import", icon: FileSpreadsheet },
   { to: "/settings", label: "Rates & settings", icon: Settings },
 ] as const;
 

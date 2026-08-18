@@ -27,6 +27,8 @@ export type Product = {
    * whenever a label is added, removed, re-priced, or reassigned — never edited directly.
    */
   label_cost_per_unit: number;
+  /** Unit of sale — Pouch/Jar/Can/Bottle — printed on bills, backfilled from `key`. */
+  unit: string;
   is_active: boolean;
 };
 

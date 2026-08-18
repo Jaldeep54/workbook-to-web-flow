@@ -622,6 +622,7 @@ export type Database = {
         Row: {
           address: string | null
           area_id: string | null
+          bill_name: string | null
           code: string
           created_at: string
           design_type: number
@@ -641,6 +642,7 @@ export type Database = {
         Insert: {
           address?: string | null
           area_id?: string | null
+          bill_name?: string | null
           code: string
           created_at?: string
           design_type?: number
@@ -660,6 +662,7 @@ export type Database = {
         Update: {
           address?: string | null
           area_id?: string | null
+          bill_name?: string | null
           code?: string
           created_at?: string
           design_type?: number

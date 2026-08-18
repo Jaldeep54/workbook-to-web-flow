@@ -27,7 +27,7 @@ type OrderRow = {
   id: string;
   delivery_date: string | null;
   order_lines: Array<{ product_id: string; qty: number }>;
-  shops: { shop_name: string; address: string | null } | null;
+  shops: { shop_name: string; bill_name: string | null; address: string | null } | null;
 };
 
 function parseOrderIds(data: unknown): { orderIds: string[] } {
@@ -62,7 +62,7 @@ export const generateBillsPdf = createServerFn({ method: "POST" })
     const [ordersResult, productsResult] = await Promise.all([
       supabaseAdmin
         .from("orders")
-        .select("id, delivery_date, order_lines(product_id, qty), shops(shop_name, address)")
+        .select("id, delivery_date, order_lines(product_id, qty), shops(shop_name, bill_name, address)")
         .in("id", orderIds as never),
       supabaseAdmin
         .from("products")
@@ -105,7 +105,7 @@ export const generateBillsPdf = createServerFn({ method: "POST" })
         orderId: o.id,
         invoiceNo: invoiceNos[i],
         deliveryDate: o.delivery_date ?? "",
-        shopName: o.shops?.shop_name ?? "Unknown shop",
+        shopName: o.shops?.bill_name || o.shops?.shop_name || "Unknown shop",
         shopAddress: o.shops?.address ?? null,
         orderLines: o.order_lines,
         products,

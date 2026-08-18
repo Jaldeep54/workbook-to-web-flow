@@ -50,6 +50,8 @@ export type Shop = {
   folder_name: string | null;
   shop_name: string;
   label_name: string | null;
+  /** Name printed on invoices/delivery challans — falls back to shop_name when unset. */
+  bill_name: string | null;
   design_type: number;
   area_id: string | null;
   image_path: string | null;

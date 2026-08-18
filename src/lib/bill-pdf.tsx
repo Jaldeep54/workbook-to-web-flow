@@ -8,7 +8,7 @@ const DARK_TEXT = "#18213A";
 const DIVIDER = "#B7BEDA";
 const TERMS_BG = "#F2F4FF";
 
-const COMPANY_NAME = "Giniya Enterprize";
+const COMPANY_NAME = "Giniya Enterprise";
 const COMPANY_PHONE = "8849660980";
 
 const TERMS_LINE_1 = "Previous order dues must be cleared before the next order.";

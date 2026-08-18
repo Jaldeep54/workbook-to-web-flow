@@ -7,7 +7,7 @@ import { useRouter } from "@tanstack/react-router";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
 
 import { loadCoreLibrary, loadMapsLibrary, loadMarkerLibrary } from "@/lib/google-maps-loader";
-import { designTypeColor, googleMapsDirectionsUrl } from "@/lib/domain";
+import { googleMapsDirectionsUrl } from "@/lib/domain";
 import type { Shop } from "@/lib/domain";
 
 export type ShopWithLocation = Shop & { latitude: number; longitude: number };
@@ -15,10 +15,12 @@ export type ShopWithLocation = Shop & { latitude: number; longitude: number };
 const DEFAULT_CENTER = { lat: 20.5937, lng: 78.9629 }; // India, whole-country view
 const DEFAULT_ZOOM = 5;
 
-// Pin glyph is drawn in a 24x24 box (Google's familiar teardrop-with-hole shape),
-// with a little padding around it so the white outline stroke doesn't get clipped.
-const PIN_GLYPH_SIZE = 24;
-const PIN_PADDING = 3;
+// Pin glyph is a solid black teardrop with the shop's Design Type number in
+// white, drawn in a 30x30 box (Google's familiar teardrop shape, scaled 1.25x
+// from the original 24x24), with a little padding around it so the white
+// outline stroke doesn't get clipped.
+const PIN_GLYPH_SIZE = 30;
+const PIN_PADDING = 3.75;
 const PIN_BOX = PIN_GLYPH_SIZE + PIN_PADDING * 2;
 const LABEL_GAP = 4;
 const LABEL_HEIGHT = 20;
@@ -67,20 +69,20 @@ function buildPinIcon(
   Size: typeof google.maps.Size,
   Point: typeof google.maps.Point,
 ): google.maps.Icon {
-  const color = designTypeColor(shop.design_type);
+  const designType = String(shop.design_type);
   const label = truncateShopName(shop.shop_name);
   const pillWidth = measureLabelWidth(label) + LABEL_PAD_X * 2;
 
   const width = PIN_BOX + LABEL_GAP + pillWidth;
   const height = PIN_BOX;
-  const pinHeadCenterY = PIN_PADDING + 9;
+  const pinHeadCenterY = PIN_PADDING + 11.25;
   const pillY = pinHeadCenterY - LABEL_HEIGHT / 2;
   const pillX = PIN_BOX + LABEL_GAP;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <g transform="translate(${PIN_PADDING}, ${PIN_PADDING})">
-    <path d="M12 0C7.03 0 3 4.03 3 9c0 6.75 9 15 9 15s9-8.25 9-15c0-4.97-4.03-9-9-9z" fill="${color}" stroke="#ffffff" stroke-width="1.5"/>
-    <circle cx="12" cy="9" r="3.4" fill="#ffffff"/>
+    <path d="M15 0C8.79 0 3.75 5.04 3.75 11.25c0 8.44 11.25 18.75 11.25 18.75s11.25-10.31 11.25-18.75c0-6.21-5.04-11.25-11.25-11.25z" fill="#000000" stroke="#ffffff" stroke-width="1.5"/>
+    <text x="15" y="11.25" text-anchor="middle" dominant-baseline="central" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="700" fill="#ffffff">${escapeXml(designType)}</text>
   </g>
   <rect x="${pillX}" y="${pillY}" width="${pillWidth}" height="${LABEL_HEIGHT}" rx="${LABEL_RADIUS}" fill="${LABEL_BG}"/>
   <text x="${pillX + LABEL_PAD_X}" y="${pillY + LABEL_HEIGHT / 2 + 4}" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="${LABEL_TEXT_COLOR}">${escapeXml(label)}</text>
@@ -89,7 +91,7 @@ function buildPinIcon(
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
     scaledSize: new Size(width, height),
-    anchor: new Point(PIN_PADDING + 12, PIN_PADDING + PIN_GLYPH_SIZE),
+    anchor: new Point(PIN_PADDING + 15, PIN_PADDING + PIN_GLYPH_SIZE),
   };
 }
 

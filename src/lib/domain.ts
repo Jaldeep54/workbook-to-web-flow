@@ -144,7 +144,7 @@ export function googleMapsDirectionsUrl(latitude: number, longitude: number): st
 export const DELIVERY_STATUSES = ["Pending", "Delivered", "Cancelled"] as const;
 export const ORDER_STATUSES = ["Pending", "Delivered", "Cancelled"] as const;
 export const PAYMENT_STATUSES = ["Pending", "Received", "Partial"] as const;
-export const COST_TYPES = ["Transportation", "Label Cost", "Others"] as const;
+export const COST_TYPES = ["Transportation", "Variable Label Cost", "Others"] as const;
 
 /** Cash Position: the only two people who record investments/payouts. */
 export const CASH_POSITION_PEOPLE = ["Bhavin", "Jaldeep"] as const;

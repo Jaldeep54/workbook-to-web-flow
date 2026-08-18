@@ -263,8 +263,8 @@ function Overview() {
               </Link>
             </Button>
             <Button asChild variant="outline" className="justify-start">
-              <Link to="/import">
-                <Download className="size-4" /> Import workbook
+              <Link to="/cash-position">
+                <IndianRupee className="size-4" /> Cash Position
               </Link>
             </Button>
           </div>

@@ -144,7 +144,11 @@ export function googleMapsDirectionsUrl(latitude: number, longitude: number): st
 export const DELIVERY_STATUSES = ["Pending", "Delivered", "Cancelled"] as const;
 export const ORDER_STATUSES = ["Pending", "Delivered", "Cancelled"] as const;
 export const PAYMENT_STATUSES = ["Pending", "Received", "Partial"] as const;
-export const COST_TYPES = ["Transportation", "Others"] as const;
+export const COST_TYPES = ["Transportation", "Label Cost", "Others"] as const;
+
+/** Cash Position: the only two people who record investments/payouts. */
+export const CASH_POSITION_PEOPLE = ["Bhavin", "Jaldeep"] as const;
+export type CashPositionPerson = (typeof CASH_POSITION_PEOPLE)[number];
 
 export function monthKey(date: string | Date): string {
   const d = typeof date === "string" ? new Date(date) : date;

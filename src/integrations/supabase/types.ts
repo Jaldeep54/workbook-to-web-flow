@@ -140,6 +140,30 @@ export type Database = {
           },
         ]
       }
+      investments: {
+        Row: {
+          amount: number
+          created_at: string
+          done_by: string
+          id: string
+          investment_date: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          done_by: string
+          id?: string
+          investment_date: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          done_by?: string
+          id?: string
+          investment_date?: string
+        }
+        Relationships: []
+      }
       label_order_lines: {
         Row: {
           id: string
@@ -401,6 +425,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payouts: {
+        Row: {
+          amount: number
+          created_at: string
+          done_by: string
+          id: string
+          payout_date: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          done_by: string
+          id?: string
+          payout_date: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          done_by?: string
+          id?: string
+          payout_date?: string
+        }
+        Relationships: []
       }
       payments: {
         Row: {
@@ -798,6 +846,7 @@ export type Database = {
           month: string
         }[]
       }
+      cash_position_summary: { Args: never; Returns: Json }
       dashboard_summary: { Args: { p_month: string }; Returns: Json }
       has_role: {
         Args: {

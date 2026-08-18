@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { CalendarIcon, Download } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarIcon, Download, FileText, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
@@ -10,6 +10,7 @@ import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -29,9 +30,10 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { productsQuery, shopsQuery } from "@/lib/queries";
 import { deliverySheetQuery } from "@/lib/records";
+import { generateBillsPdf } from "@/lib/generate-bill.server";
 import { ORDER_STATUSES } from "@/lib/domain";
 import { dateLabel, num, todayISO } from "@/lib/format";
-import { downloadCsv } from "@/lib/export";
+import { downloadBlob, downloadCsv, filenameFromContentDisposition } from "@/lib/export";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/delivery-sheet")({
@@ -66,6 +68,33 @@ function DeliverySheetPage() {
         : allOrders.filter((o) => shopById.get(o.shop_id)?.area_id === areaFilter),
     [allOrders, shopById, areaFilter],
   );
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  useEffect(() => setSelected(new Set()), [date]);
+  const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
+  const selectedCount = orderIds.filter((id) => selected.has(id)).length;
+
+  const downloadBillPdf = async (ids: string[]) => {
+    const response = await generateBillsPdf({ data: { orderIds: ids } });
+    const blob = await response.blob();
+    const filename = filenameFromContentDisposition(
+      response.headers.get("content-disposition"),
+      "klinzo-bill.pdf",
+    );
+    downloadBlob(filename, blob);
+  };
+
+  const generateBill = useMutation({
+    mutationFn: downloadBillPdf,
+    onSuccess: () => toast.success("Bill downloaded"),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const generateAllBills = useMutation({
+    mutationFn: () => downloadBillPdf(orderIds.filter((id) => selected.has(id))),
+    onSuccess: () => toast.success("Bills downloaded"),
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const setStatus = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
@@ -169,6 +198,14 @@ function DeliverySheetPage() {
             >
               <Download className="size-4" /> Export
             </Button>
+            <Button
+              variant="outline"
+              disabled={selectedCount === 0 || generateAllBills.isPending}
+              onClick={() => generateAllBills.mutate()}
+            >
+              <Send className="size-4" /> Generate all bills
+              {selectedCount > 0 ? ` (${selectedCount})` : ""}
+            </Button>
           </>
         }
       />
@@ -187,6 +224,15 @@ function DeliverySheetPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={orders.length > 0 && selectedCount === orders.length}
+                  onCheckedChange={(checked) =>
+                    setSelected(checked === true ? new Set(orderIds) : new Set())
+                  }
+                  aria-label="Select all orders"
+                />
+              </TableHead>
               <TableHead className="w-14 text-right">S. No.</TableHead>
               <TableHead>Shop name</TableHead>
               <TableHead>Label name</TableHead>
@@ -199,13 +245,14 @@ function DeliverySheetPage() {
               ))}
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
                 <TableCell
-                  colSpan={products.length + 7}
+                  colSpan={products.length + 9}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Loading delivery sheet…
@@ -215,7 +262,7 @@ function DeliverySheetPage() {
             {!isLoading && orders.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={products.length + 7}
+                  colSpan={products.length + 9}
                   className="py-12 text-center text-muted-foreground"
                 >
                   No orders scheduled for {dateLabel(date)}.
@@ -224,6 +271,20 @@ function DeliverySheetPage() {
             )}
             {orders.map((o, i) => (
               <TableRow key={o.id}>
+                <TableCell>
+                  <Checkbox
+                    checked={selected.has(o.id)}
+                    onCheckedChange={(checked) =>
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (checked === true) next.add(o.id);
+                        else next.delete(o.id);
+                        return next;
+                      })
+                    }
+                    aria-label={`Select order ${o.order_no}`}
+                  />
+                </TableCell>
                 <TableCell className="num text-right text-muted-foreground">{i + 1}</TableCell>
                 <TableCell className="font-medium">{o.shops?.shop_name ?? "—"}</TableCell>
                 <TableCell className="text-muted-foreground">
@@ -256,6 +317,17 @@ function DeliverySheetPage() {
                     </Select>
                     {o.status === "Delivered" && <Badge>Synced</Badge>}
                   </div>
+                </TableCell>
+                <TableCell>
+                  <button
+                    type="button"
+                    onClick={() => generateBill.mutate([o.id])}
+                    disabled={generateBill.isPending}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    aria-label={`Generate bill for order ${o.order_no}`}
+                  >
+                    <FileText className="size-4" />
+                  </button>
                 </TableCell>
               </TableRow>
             ))}

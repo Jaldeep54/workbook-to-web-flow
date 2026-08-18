@@ -96,6 +96,7 @@ export type PaymentRecord = {
   payment_date: string | null;
   status: string | null;
   collected_by: string | null;
+  collected_date: string | null;
   amount: number;
   shops: ShopRef;
   orders: { order_no: number } | null;
@@ -107,7 +108,7 @@ export const paymentsQuery = (month: string, shopId: string | "all") =>
     queryFn: async () => {
       let q = supabase
         .from("payments")
-        .select("id, shop_id, order_id, payment_date, status, collected_by, amount, shops(code, shop_name, label_name), orders(order_no)")
+        .select("id, shop_id, order_id, payment_date, status, collected_by, collected_date, amount, shops(code, shop_name, label_name), orders(order_no)")
         .eq("month", month)
         .order("payment_date", { ascending: false })
         .limit(1000);

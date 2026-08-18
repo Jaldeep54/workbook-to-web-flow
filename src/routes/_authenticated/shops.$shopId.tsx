@@ -10,17 +10,23 @@ import { ShopAnalysisTab } from "@/components/shop-analysis";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -38,6 +44,7 @@ import {
   shopsQuery,
 } from "@/lib/queries";
 import { dateLabel, inr, num, todayISO } from "@/lib/format";
+import { ORDER_STATUSES } from "@/lib/domain";
 
 export const Route = createFileRoute("/_authenticated/shops/$shopId")({
   head: () => ({
@@ -81,6 +88,7 @@ type HistoryPayment = {
   payment_date: string | null;
   status: string | null;
   collected_by: string | null;
+  collected_date: string | null;
   amount: number;
 };
 
@@ -113,7 +121,9 @@ function ShopDetail() {
   const { data: stock = [] } = useQuery(labelStockQuery);
 
   const [newOrderOpen, setNewOrderOpen] = useState(false);
-  const [deliveringId, setDeliveringId] = useState<HistoryDelivery | null>(null);
+  const [receivingPayment, setReceivingPayment] = useState<HistoryPayment | null>(null);
+  const [collectedBy, setCollectedBy] = useState("");
+  const [collectedDate, setCollectedDate] = useState("");
 
   const history = useQuery({
     queryKey: ["shop_history", shopId],
@@ -137,7 +147,7 @@ function ShopDetail() {
           .limit(200),
         supabase
           .from("payments")
-          .select("id, payment_date, status, collected_by, amount")
+          .select("id, payment_date, status, collected_by, collected_date, amount")
           .eq("shop_id", shopId)
           .order("payment_date", { ascending: false })
           .limit(200),
@@ -157,40 +167,60 @@ function ShopDetail() {
     for (const key of INVALIDATE_KEYS) void qc.invalidateQueries({ queryKey: [key] });
   };
 
-  const markDelivered = useMutation({
-    mutationFn: async (delivery: HistoryDelivery) => {
+  const setDeliveryStatus = useMutation({
+    mutationFn: async ({ delivery, status }: { delivery: HistoryDelivery; status: string }) => {
       const { error } = await supabase.rpc(
         "set_order_status" as never,
         {
           p_order_id: delivery.order_id,
-          p_status: "Delivered",
+          p_status: status,
           p_delivery_date: delivery.delivery_date ?? todayISO(),
         } as never,
       );
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => {
-      toast.success("Marked delivered — sales, cost and payment figures updated");
-      setDeliveringId(null);
+    onSuccess: (_d, vars) => {
+      toast.success(
+        vars.status === "Delivered"
+          ? "Marked delivered — sales, cost and payment figures updated"
+          : `Status set to ${vars.status}`,
+      );
       invalidateAll();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const markReceived = useMutation({
-    mutationFn: async (paymentId: string) => {
+    mutationFn: async ({
+      paymentId,
+      collectedBy: by,
+      collectedDate: date,
+    }: {
+      paymentId: string;
+      collectedBy: string;
+      collectedDate: string;
+    }) => {
       const { error } = await supabase
         .from("payments")
-        .update({ status: "Received" })
+        .update({ status: "Received", collected_by: by, collected_date: date })
         .eq("id", paymentId);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       toast.success("Payment marked received");
+      setReceivingPayment(null);
+      setCollectedBy("");
+      setCollectedDate("");
       invalidateAll();
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const openReceive = (payment: HistoryPayment) => {
+    setReceivingPayment(payment);
+    setCollectedBy(payment.collected_by ?? "");
+    setCollectedDate(payment.collected_date ?? todayISO());
+  };
 
   const sales = (history.data?.deliveries ?? []).reduce((a, d) => a + Number(d.total_sales), 0);
   const received = (history.data?.payments ?? [])
@@ -299,7 +329,6 @@ function ShopDetail() {
                   <TableHead className="text-right">Sales</TableHead>
                   <TableHead className="text-right">Fixed cost</TableHead>
                   <TableHead className="text-right">Profit</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -307,26 +336,34 @@ function ShopDetail() {
                   <TableRow key={d.id}>
                     <TableCell>{dateLabel(d.delivery_date)}</TableCell>
                     <TableCell>
-                      <Badge variant={d.status === "Delivered" ? "default" : "secondary"}>
-                        {d.status ?? "—"}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={d.status ?? "Pending"}
+                          onValueChange={(status) => setDeliveryStatus.mutate({ delivery: d, status })}
+                        >
+                          <SelectTrigger className="w-[130px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ORDER_STATUSES.map((s) => (
+                              <SelectItem key={s} value={s}>
+                                {s}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {d.status === "Delivered" && <Badge>Synced</Badge>}
+                      </div>
                     </TableCell>
                     <TableCell className="num text-right">{num(d.total_qty)}</TableCell>
                     <TableCell className="num text-right">{inr(d.total_sales)}</TableCell>
                     <TableCell className="num text-right">{inr(d.total_fixed_cost)}</TableCell>
                     <TableCell className="num text-right font-semibold">{inr(d.profit)}</TableCell>
-                    <TableCell className="text-right">
-                      {(d.status ?? "Pending") === "Pending" && (
-                        <Button size="sm" variant="outline" onClick={() => setDeliveringId(d)}>
-                          Mark Delivered
-                        </Button>
-                      )}
-                    </TableCell>
                   </TableRow>
                 ))}
                 {(history.data?.deliveries ?? []).length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                       No deliveries yet.
                     </TableCell>
                   </TableRow>
@@ -364,7 +401,7 @@ function ShopDetail() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => markReceived.mutate(p.id)}
+                          onClick={() => openReceive(p)}
                           disabled={markReceived.isPending}
                         >
                           Mark Received
@@ -431,28 +468,49 @@ function ShopDetail() {
         onSaved={() => void history.refetch()}
       />
 
-      <AlertDialog open={!!deliveringId} onOpenChange={(o) => !o && setDeliveringId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Mark this delivery as Delivered?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This finalizes sales, cost and profit figures for{" "}
-              {deliveringId ? dateLabel(deliveringId.delivery_date) : "this delivery"} and creates
-              or updates its payment record. This mirrors the same delivery workflow used on the
-              Delivery sheet and cannot be easily undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deliveringId && markDelivered.mutate(deliveringId)}
-              disabled={markDelivered.isPending}
+      <Dialog
+        open={!!receivingPayment}
+        onOpenChange={(o) => !o && setReceivingPayment(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Mark payment received</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Collected by</Label>
+              <Input
+                value={collectedBy}
+                onChange={(e) => setCollectedBy(e.target.value)}
+                placeholder="Name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Collection date</Label>
+              <Input
+                type="date"
+                value={collectedDate}
+                onChange={(e) => setCollectedDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() =>
+                receivingPayment &&
+                markReceived.mutate({
+                  paymentId: receivingPayment.id,
+                  collectedBy: collectedBy.trim(),
+                  collectedDate,
+                })
+              }
+              disabled={!collectedBy.trim() || !collectedDate || markReceived.isPending}
             >
-              Mark Delivered
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              Mark Received
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

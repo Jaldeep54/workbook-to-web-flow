@@ -848,6 +848,10 @@ export type Database = {
       }
       cash_position_summary: { Args: never; Returns: Json }
       dashboard_summary: { Args: { p_month: string }; Returns: Json }
+      dashboard_summary_by_area: {
+        Args: { p_area_id?: string | null; p_month: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

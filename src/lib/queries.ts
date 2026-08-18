@@ -102,6 +102,42 @@ export const summaryQuery = (month: string) =>
     },
   });
 
+/**
+ * Area-scoped sibling of dashboard_summary — same fields, plus a 3-month
+ * sales trend, a product revenue-share breakdown for the month, and the
+ * area's (or whole business's) top 5 shops by sales. Used by the Overview
+ * page once a Shop Area is selected via ShopAreaFilter; areaId null/"all"
+ * behaves identically to summaryQuery (whole business).
+ */
+export type DashboardSummaryByArea = DashboardSummary & {
+  areaId: string | null;
+  monthlySales: Array<{ month: string; totalSales: number }>;
+  productMix: Array<{
+    productId: string;
+    shortName: string;
+    sortOrder: number;
+    amount: number;
+    sharePct: number;
+  }>;
+  topShops: Array<{ shopId: string; shopName: string; sales: number }>;
+};
+
+export const summaryByAreaQuery = (month: string, areaId: string | "all") =>
+  queryOptions({
+    queryKey: ["dashboard_summary_by_area", month, areaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(
+        "dashboard_summary_by_area" as never,
+        {
+          p_month: month,
+          p_area_id: areaId === "all" ? null : areaId,
+        } as never,
+      );
+      if (error) throw new Error(error.message);
+      return data as unknown as DashboardSummaryByArea;
+    },
+  });
+
 export type LabelStockRow = {
   shop_id: string;
   shop_name: string;

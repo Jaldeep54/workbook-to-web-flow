@@ -8,8 +8,18 @@ import {
 } from "@/components/ui/select";
 import { shopAreasQuery, shopsQuery } from "@/lib/queries";
 
-export function ShopFilter({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { data: shops = [] } = useQuery(shopsQuery);
+/** Pass `areaId` to cascade the shop list down to one Shop Area (from ShopAreaFilter). */
+export function ShopFilter({
+  value,
+  onChange,
+  areaId,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  areaId?: string | null;
+}) {
+  const { data: allShops = [] } = useQuery(shopsQuery);
+  const shops = areaId ? allShops.filter((s) => s.area_id === areaId) : allShops;
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="w-[210px] bg-card">

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { ShopSelect, shopLabel } from "@/components/filter-bar";
+import { ShopAreaFilter, shopLabel } from "@/components/filter-bar";
 import { ProductQtyGrid } from "@/components/product-qty-grid";
+import { SearchableShopSelect } from "@/components/shop-select";
 import { ShopSalesIndicator } from "@/components/shop-sales-indicator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,7 @@ export function NewOrderDialog({
 }) {
   const qc = useQueryClient();
   const [shopId, setShopId] = useState("");
+  const [areaFilter, setAreaFilter] = useState("all");
   const [orderDate, setOrderDate] = useState(todayISO());
   const [deliveryDate, setDeliveryDate] = useState(todayISO());
   const [qty, setQty] = useState<QtyMap>({});
@@ -58,6 +60,7 @@ export function NewOrderDialog({
   // an existing one being edited, or a shop locked in from Shop Details.
   useEffect(() => {
     if (!open) return;
+    setAreaFilter("all");
     if (editing) {
       setShopId(editing.shop_id);
       setOrderDate(editing.order_date ?? todayISO());
@@ -201,7 +204,24 @@ export function NewOrderDialog({
                 {selectedShop ? shopLabel(selectedShop.shop_name, selectedShop.label_name) : "—"}
               </p>
             ) : (
-              <ShopSelect value={shopId} onChange={setShopId} />
+              <div className="flex gap-2">
+                <div className="w-40 shrink-0">
+                  <ShopAreaFilter
+                    value={areaFilter}
+                    onChange={(area) => {
+                      setAreaFilter(area);
+                      setShopId("");
+                    }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <SearchableShopSelect
+                    value={shopId}
+                    onChange={setShopId}
+                    areaId={areaFilter !== "all" ? areaFilter : null}
+                  />
+                </div>
+              </div>
             )}
             {shopId && (
               <p className="text-xs text-muted-foreground">

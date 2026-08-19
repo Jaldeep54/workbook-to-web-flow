@@ -19,8 +19,21 @@ import {
 
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { productsQuery, summaryQuery, type DashboardSummary } from "@/lib/queries";
 import { monthLabel, recentMonths } from "@/lib/domain";
 import { inr, num } from "@/lib/format";
@@ -30,9 +43,15 @@ export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
     meta: [
       { title: "Reports — Klinzo Operations" },
-      { name: "description", content: "Month-by-month sales, profit, collections and product mix with CSV export." },
+      {
+        name: "description",
+        content: "Month-by-month sales, profit, collections and product mix with CSV export.",
+      },
       { property: "og:title", content: "Reports — Klinzo Operations" },
-      { property: "og:description", content: "Trend dashboards rebuilt from the workbook, in milliseconds." },
+      {
+        property: "og:description",
+        content: "Trend dashboards rebuilt from the workbook, in milliseconds.",
+      },
     ],
   }),
   component: ReportsPage,
@@ -83,6 +102,7 @@ function ReportsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="1">Last 1 month</SelectItem>
                 <SelectItem value="3">Last 3 months</SelectItem>
                 <SelectItem value="6">Last 6 months</SelectItem>
                 <SelectItem value="12">Last 12 months</SelectItem>
@@ -105,7 +125,9 @@ function ReportsPage() {
                     "Fixed cost": r["Fixed cost"],
                     "Variable cost": r["Variable cost"],
                     Profit: r.Profit,
-                    ...Object.fromEntries(products.map((p) => [p.short_name, r.byProduct[p.key] ?? 0])),
+                    ...Object.fromEntries(
+                      products.map((p) => [p.short_name, r.byProduct[p.key] ?? 0]),
+                    ),
                   })),
                 )
               }
@@ -128,11 +150,20 @@ function ReportsPage() {
                     <stop offset="100%" stopColor="var(--color-chart-1)" stopOpacity={0.04} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--color-border)"
+                  vertical={false}
+                />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
                 <YAxis tickLine={false} axisLine={false} fontSize={12} />
                 <Tooltip formatter={(v: number) => inr(v)} contentStyle={tooltipStyle} />
-                <Area dataKey="Sales" stroke="var(--color-chart-1)" fill="url(#salesFill)" strokeWidth={2} />
+                <Area
+                  dataKey="Sales"
+                  stroke="var(--color-chart-1)"
+                  fill="url(#salesFill)"
+                  strokeWidth={2}
+                />
                 <Line dataKey="Profit" stroke="var(--color-chart-2)" strokeWidth={2} dot={false} />
                 <Legend />
               </AreaChart>
@@ -145,7 +176,11 @@ function ReportsPage() {
           <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={rows}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--color-border)"
+                  vertical={false}
+                />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
                 <YAxis tickLine={false} axisLine={false} fontSize={12} />
                 <Tooltip formatter={(v: number) => inr(v)} contentStyle={tooltipStyle} />
@@ -162,11 +197,20 @@ function ReportsPage() {
           <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={rows}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--color-border)"
+                  vertical={false}
+                />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
                 <YAxis tickLine={false} axisLine={false} fontSize={12} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Line dataKey="Units" stroke="var(--color-chart-4)" strokeWidth={2} dot={{ r: 3 }} />
+                <Line
+                  dataKey="Units"
+                  stroke="var(--color-chart-4)"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>

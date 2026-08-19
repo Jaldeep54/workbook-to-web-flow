@@ -1,18 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { CalendarIcon, Download, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Download, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { FinancialYearPicker } from "@/components/financial-year-picker";
+import { HighlightedDatePicker } from "@/components/highlighted-date-picker";
 import { MonthPicker } from "@/components/month-picker";
 import { ShopAreaFilter, ShopFilter } from "@/components/filter-bar";
 import { NewOrderDialog } from "@/components/new-order-dialog";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,10 +34,15 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { productsQuery, shopsQuery } from "@/lib/queries";
 import { ordersQuery, type OrderRecord } from "@/lib/records";
-import { currentMonth, monthLabel, monthKey } from "@/lib/domain";
+import {
+  currentFinancialYear,
+  currentMonth,
+  defaultMonthForFinancialYear,
+  monthLabel,
+  monthKey,
+} from "@/lib/domain";
 import { dateLabel, num } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/orders")({
   head: () => ({
@@ -53,6 +58,7 @@ export const Route = createFileRoute("/_authenticated/orders")({
 
 function OrdersPage() {
   const qc = useQueryClient();
+  const [fy, setFy] = useState(currentFinancialYear());
   const [month, setMonth] = useState(currentMonth());
   const [shopFilter, setShopFilter] = useState("all");
   const [areaFilter, setAreaFilter] = useState("all");
@@ -64,6 +70,11 @@ function OrdersPage() {
   const { data: products = [] } = useQuery(productsQuery);
   const { data: shops = [] } = useQuery(shopsQuery);
   const { data: orders = [], isLoading } = useQuery(ordersQuery(month, shopFilter));
+
+  const orderDatesThisMonth = useMemo(
+    () => Array.from(new Set(orders.map((o) => o.order_date).filter((d): d is string => !!d))),
+    [orders],
+  );
 
   // Area + exact-date narrow the already month-scoped order list — never a lifetime total.
   const shopIdsInArea = useMemo(() => {
@@ -152,40 +163,33 @@ function OrdersPage() {
         description={`${filteredOrders.length} orders in ${monthLabel(month)}${exactDate ? ` on ${dateLabel(exactDate)}` : ""}`}
         actions={
           <>
-            <MonthPicker value={month} onChange={setMonth} />
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("justify-start bg-card font-normal")}>
-                  <CalendarIcon className="size-4" />
-                  {exactDate ? dateLabel(exactDate) : "Any date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={exactDate ? new Date(`${exactDate}T00:00:00`) : undefined}
-                  onSelect={(d) => {
-                    if (!d) return;
-                    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-                    setExactDate(local.toISOString().slice(0, 10));
-                  }}
-                  initialFocus
-                  className={cn("pointer-events-auto p-3")}
-                />
-                {exactDate && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="m-2 mt-0 w-[calc(100%-1rem)]"
-                    onClick={() => setExactDate(null)}
-                  >
-                    <X className="size-3.5" /> Clear date
-                  </Button>
-                )}
-              </PopoverContent>
-            </Popover>
-            <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
-            <ShopFilter value={shopFilter} onChange={setShopFilter} />
+            <FinancialYearPicker
+              value={fy}
+              onChange={(newFy) => {
+                setFy(newFy);
+                setMonth(defaultMonthForFinancialYear(newFy));
+              }}
+              dates={orders.map((o) => o.order_date)}
+            />
+            <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
+            <HighlightedDatePicker
+              value={exactDate}
+              onChange={setExactDate}
+              highlightedDates={orderDatesThisMonth}
+              placeholder="Any date"
+            />
+            <ShopAreaFilter
+              value={areaFilter}
+              onChange={(area) => {
+                setAreaFilter(area);
+                setShopFilter("all");
+              }}
+            />
+            <ShopFilter
+              value={shopFilter}
+              onChange={setShopFilter}
+              areaId={areaFilter !== "all" ? areaFilter : undefined}
+            />
             <Button
               variant="outline"
               onClick={() =>

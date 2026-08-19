@@ -5,17 +5,45 @@ import { Download, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { MonthPicker } from "@/components/month-picker";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { costsQuery } from "@/lib/records";
-import { COST_TYPES, currentMonth, monthKey, monthLabel } from "@/lib/domain";
+import {
+  COST_TYPES,
+  currentFinancialYear,
+  currentMonth,
+  defaultMonthForFinancialYear,
+  monthKey,
+  monthLabel,
+} from "@/lib/domain";
 import { dateLabel, inr, todayISO } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 
@@ -23,7 +51,10 @@ export const Route = createFileRoute("/_authenticated/costs")({
   head: () => ({
     meta: [
       { title: "Variable costs — Klinzo Operations" },
-      { name: "description", content: "Log transport, salary, rent and other variable costs that reduce monthly profit." },
+      {
+        name: "description",
+        content: "Log transport, salary, rent and other variable costs that reduce monthly profit.",
+      },
       { property: "og:title", content: "Variable costs — Klinzo Operations" },
       { property: "og:description", content: "Monthly variable cost register." },
     ],
@@ -33,6 +64,7 @@ export const Route = createFileRoute("/_authenticated/costs")({
 
 function CostsPage() {
   const qc = useQueryClient();
+  const [fy, setFy] = useState(currentFinancialYear());
   const [month, setMonth] = useState(currentMonth());
   const [open, setOpen] = useState(false);
   const [costDate, setCostDate] = useState(todayISO());
@@ -86,13 +118,26 @@ function CostsPage() {
         description={`Costs recorded for ${monthLabel(month)}`}
         actions={
           <>
-            <MonthPicker value={month} onChange={setMonth} />
+            <FinancialYearPicker
+              value={fy}
+              onChange={(newFy) => {
+                setFy(newFy);
+                setMonth(defaultMonthForFinancialYear(newFy));
+              }}
+              dates={costs.map((c) => c.cost_date)}
+            />
+            <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
             <Button
               variant="outline"
               onClick={() =>
                 downloadCsv(
                   `klinzo-costs-${month}`,
-                  costs.map((c) => ({ Date: c.cost_date, Type: c.cost_type, Amount: c.amount, Note: c.note ?? "" })),
+                  costs.map((c) => ({
+                    Date: c.cost_date,
+                    Type: c.cost_type,
+                    Amount: c.amount,
+                    Note: c.note ?? "",
+                  })),
                 )
               }
             >
@@ -111,11 +156,20 @@ function CostsPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Date</Label>
-                    <Input type="date" value={costDate} onChange={(e) => setCostDate(e.target.value)} />
+                    <Input
+                      type="date"
+                      value={costDate}
+                      onChange={(e) => setCostDate(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Amount</Label>
-                    <Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
+                    <Input
+                      type="number"
+                      min={0}
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label className="text-xs">Type</Label>

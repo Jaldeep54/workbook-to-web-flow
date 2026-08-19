@@ -1,17 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarIcon, Download, FileText, Send } from "lucide-react";
+import { Download, FileText, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { FinancialYearPicker } from "@/components/financial-year-picker";
+import { HighlightedDatePicker } from "@/components/highlighted-date-picker";
+import { MonthPicker } from "@/components/month-picker";
 import { ShopAreaFilter } from "@/components/filter-bar";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -31,10 +32,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { productsQuery, shopsQuery } from "@/lib/queries";
 import { deliverySheetQuery } from "@/lib/records";
 import { generateBillsPdf } from "@/lib/generate-bill.server";
-import { ORDER_STATUSES } from "@/lib/domain";
+import {
+  ORDER_STATUSES,
+  currentFinancialYear,
+  currentMonth,
+  defaultMonthForFinancialYear,
+  financialYearRange,
+  monthKey,
+} from "@/lib/domain";
 import { dateLabel, num, todayISO } from "@/lib/format";
 import { downloadBlob, downloadCsv, filenameFromContentDisposition } from "@/lib/export";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/delivery-sheet")({
   head: () => ({
@@ -55,10 +62,32 @@ export const Route = createFileRoute("/_authenticated/delivery-sheet")({
 function DeliverySheetPage() {
   const qc = useQueryClient();
   const [date, setDate] = useState(todayISO());
+  const [fy, setFy] = useState(currentFinancialYear());
+  const [month, setMonth] = useState(currentMonth());
   const [areaFilter, setAreaFilter] = useState("all");
   const { data: products = [] } = useQuery(productsQuery);
   const { data: shops = [] } = useQuery(shopsQuery);
   const { data: allOrders = [], isLoading } = useQuery(deliverySheetQuery(date));
+
+  // Every delivery-due date in the selected FY, purely to light up the
+  // calendar — the delivery sheet itself is still scoped to one exact `date`.
+  const { data: dueDates = [] } = useQuery({
+    queryKey: ["delivery_due_dates", fy],
+    queryFn: async () => {
+      const { start, end } = financialYearRange(fy);
+      const { data, error } = await supabase
+        .from("orders")
+        .select("delivery_date")
+        .gte("delivery_date", start)
+        .lte("delivery_date", end)
+        .not("delivery_date", "is", null)
+        .limit(2000);
+      if (error) throw new Error(error.message);
+      return Array.from(
+        new Set((data ?? []).map((r) => (r as { delivery_date: string }).delivery_date)),
+      );
+    },
+  });
 
   const shopById = useMemo(() => new Map(shops.map((s) => [s.id, s])), [shops]);
   const orders = useMemo(
@@ -152,30 +181,35 @@ function DeliverySheetPage() {
         description={`Orders scheduled for delivery on ${dateLabel(date)}`}
         actions={
           <>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn("w-[200px] justify-start bg-card font-normal")}
-                >
-                  <CalendarIcon className="size-4" />
-                  {dateLabel(date)}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={new Date(`${date}T00:00:00`)}
-                  onSelect={(d) => {
-                    if (!d) return;
-                    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-                    setDate(local.toISOString().slice(0, 10));
-                  }}
-                  initialFocus
-                  className={cn("pointer-events-auto p-3")}
-                />
-              </PopoverContent>
-            </Popover>
+            <FinancialYearPicker
+              value={fy}
+              onChange={(newFy) => {
+                setFy(newFy);
+                const m = defaultMonthForFinancialYear(newFy);
+                setMonth(m);
+                setDate(m);
+              }}
+              dates={dueDates}
+            />
+            <MonthPicker
+              value={month}
+              onChange={(m) => {
+                setMonth(m);
+                setDate(m);
+              }}
+              financialYear={fy}
+            />
+            <HighlightedDatePicker
+              value={date}
+              onChange={(d) => {
+                if (!d) return;
+                setDate(d);
+                setMonth(monthKey(d));
+              }}
+              highlightedDates={dueDates}
+              allowClear={false}
+              className="w-[200px]"
+            />
             <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
             <Button
               variant="outline"

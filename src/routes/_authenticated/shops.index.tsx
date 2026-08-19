@@ -7,12 +7,20 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { LocationPicker } from "@/components/location-picker";
 import { ProductMultiSelect, ProductChips } from "@/components/product-multi-select";
+import { ShopAreaFilter } from "@/components/filter-bar";
 import { ShopAreaSelect } from "@/components/shop-area-select";
 import { ShopImageField } from "@/components/shop-image-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
@@ -86,6 +94,71 @@ const emptyShop = {
   is_active: true,
 };
 
+/** Base "Handled by" options — grows over time with any distinct value already on file. */
+const DEFAULT_HANDLERS = ["Bhavin", "Amisha"];
+
+function HandledBySelect({
+  value,
+  onChange,
+  shops,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  shops: Shop[];
+}) {
+  const [addingNew, setAddingNew] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  const options = useMemo(() => {
+    const existing = shops.map((s) => s.handled_by).filter((v): v is string => !!v);
+    const all = new Set([...DEFAULT_HANDLERS, ...existing]);
+    if (value) all.add(value);
+    return Array.from(all).sort((a, b) => a.localeCompare(b));
+  }, [shops, value]);
+
+  const confirmNewName = () => {
+    if (newName.trim()) onChange(newName.trim());
+    setAddingNew(false);
+    setNewName("");
+  };
+
+  if (addingNew) {
+    return (
+      <div className="flex gap-2">
+        <Input
+          autoFocus
+          placeholder="Person's name"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && confirmNewName()}
+        />
+        <Button type="button" variant="outline" onClick={confirmNewName}>
+          Add
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      value={value || undefined}
+      onValueChange={(v) => (v === "__add__" ? setAddingNew(true) : onChange(v))}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Select person" />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o} value={o}>
+            {o}
+          </SelectItem>
+        ))}
+        <SelectItem value="__add__">+ Add Person…</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
 function ShopsPage() {
   const qc = useQueryClient();
   const { data: shops = [], isLoading } = useQuery(shopsQuery);
@@ -93,6 +166,7 @@ function ShopsPage() {
   const { data: shopProducts = [] } = useQuery(shopProductsQuery);
   const { data: areas = [] } = useQuery(shopAreasQuery);
   const [search, setSearch] = useState("");
+  const [areaFilter, setAreaFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Shop | null>(null);
   const [form, setForm] = useState({ ...emptyShop });
@@ -118,13 +192,24 @@ function ShopsPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return shops;
-    return shops.filter((s) =>
-      [s.code, s.shop_name, s.label_name, s.handled_by, s.mobile, s.address, areaName(s.area_id)]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
-    );
-  }, [shops, search, areaName]);
+    return shops
+      .filter((s) => areaFilter === "all" || s.area_id === areaFilter)
+      .filter(
+        (s) =>
+          !q ||
+          [
+            s.code,
+            s.shop_name,
+            s.label_name,
+            s.handled_by,
+            s.mobile,
+            s.address,
+            areaName(s.area_id),
+          ]
+            .filter(Boolean)
+            .some((v) => String(v).toLowerCase().includes(q)),
+      );
+  }, [shops, search, areaFilter, areaName]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -356,11 +441,14 @@ function ShopsPage() {
                 value={form.mobile}
                 onChange={(v) => setForm({ ...form, mobile: v })}
               />
-              <Field
-                label="Handled by"
-                value={form.handled_by}
-                onChange={(v) => setForm({ ...form, handled_by: v })}
-              />
+              <div className="space-y-1.5">
+                <Label className="text-xs">Handled by</Label>
+                <HandledBySelect
+                  value={form.handled_by}
+                  onChange={(v) => setForm({ ...form, handled_by: v })}
+                  shops={shops}
+                />
+              </div>
               <Field
                 label="Joined on"
                 type="date"
@@ -455,14 +543,15 @@ function ShopsPage() {
       </AlertDialog>
 
       <div className="surface-card overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-border p-3">
-          <Search className="size-4 text-muted-foreground" />
+        <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
+          <Search className="size-4 shrink-0 text-muted-foreground" />
           <Input
             placeholder="Search shops, area, handler, mobile…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="border-0 bg-transparent shadow-none focus-visible:ring-0"
+            className="min-w-40 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
           />
+          <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
         </div>
         <div className="overflow-x-auto">
           <Table>

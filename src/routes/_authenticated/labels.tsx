@@ -5,8 +5,9 @@ import { AlertTriangle, Download, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { MonthPicker } from "@/components/month-picker";
-import { ShopFilter, ShopSelect } from "@/components/filter-bar";
+import { ShopAreaFilter, ShopFilter, ShopSelect } from "@/components/filter-bar";
 import { LabelOrderSuggestionTab } from "@/components/label-order-suggestion";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
@@ -41,9 +42,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { labelProductsQuery, labelStockQuery } from "@/lib/queries";
+import { labelProductsQuery, labelStockQuery, shopAreasQuery, shopsQuery } from "@/lib/queries";
 import { labelOrdersQuery, nextOrderNo, type LabelOrderRecord } from "@/lib/records";
-import { currentMonth, labelsFromSheets, monthKey, monthLabel } from "@/lib/domain";
+import {
+  currentFinancialYear,
+  currentMonth,
+  defaultMonthForFinancialYear,
+  labelsFromSheets,
+  monthKey,
+  monthLabel,
+} from "@/lib/domain";
+import type { Shop } from "@/lib/domain";
 import { dateLabel, inr, num, todayISO } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 import { cn } from "@/lib/utils";
@@ -262,7 +271,9 @@ function StockDashboard() {
 
 function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string) => void }) {
   const qc = useQueryClient();
+  const [fy, setFy] = useState(currentFinancialYear());
   const [shopFilter, setShopFilter] = useState("all");
+  const [areaFilter, setAreaFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
   const [open, setOpen] = useState(false);
   const [shopId, setShopId] = useState("");
@@ -272,10 +283,27 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
 
   const { data: labelProducts = [] } = useQuery(labelProductsQuery);
   const { data: monthOrders = [], isLoading } = useQuery(labelOrdersQuery(month, shopFilter));
+  const { data: shops = [] } = useQuery(shopsQuery);
+  const { data: areas = [] } = useQuery(shopAreasQuery);
 
-  // "Date" mode narrows the month's results to a single day, client-side —
-  // no new backend query, the month's orders are already loaded.
-  const orders = dateFilter ? monthOrders.filter((o) => o.order_date === dateFilter) : monthOrders;
+  const shopById = useMemo(() => new Map(shops.map((s) => [s.id, s])), [shops]);
+  const areaName = (areaId: string | null | undefined) =>
+    (areaId && areas.find((a) => a.id === areaId)?.name) || "Not Assigned";
+  const shopDisplay = (shop: Shop | undefined) => {
+    if (!shop) return { primary: "—", secondary: null as string | null };
+    const primary = shop.folder_name || shop.label_name || shop.shop_name;
+    const secondary =
+      shop.folder_name && shop.label_name && shop.label_name !== shop.folder_name
+        ? shop.label_name
+        : null;
+    return { primary, secondary };
+  };
+
+  // "Date" mode narrows the month's results to a single day; the area filter
+  // narrows by the order's shop's area — both client-side, no new query.
+  const orders = monthOrders
+    .filter((o) => !dateFilter || o.order_date === dateFilter)
+    .filter((o) => areaFilter === "all" || shopById.get(o.shop_id)?.area_id === areaFilter);
 
   // Per-product sheet totals across every order currently shown (respecting
   // whatever month/date/shop filter is active) — not the "new order" draft.
@@ -369,7 +397,15 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
-        <MonthPicker value={month} onChange={setMonth} />
+        <FinancialYearPicker
+          value={fy}
+          onChange={(newFy) => {
+            setFy(newFy);
+            setMonth(defaultMonthForFinancialYear(newFy));
+          }}
+          dates={monthOrders.map((o) => o.order_date)}
+        />
+        <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
         <div className="flex items-center gap-1">
           <Input
             type="date"
@@ -390,7 +426,18 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
             </Button>
           )}
         </div>
-        <ShopFilter value={shopFilter} onChange={setShopFilter} />
+        <ShopAreaFilter
+          value={areaFilter}
+          onChange={(area) => {
+            setAreaFilter(area);
+            setShopFilter("all");
+          }}
+        />
+        <ShopFilter
+          value={shopFilter}
+          onChange={setShopFilter}
+          areaId={areaFilter !== "all" ? areaFilter : undefined}
+        />
         <Button
           variant="outline"
           onClick={() =>
@@ -398,7 +445,9 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
               `klinzo-label-orders-${dateFilter || month}`,
               orders.map((o) => ({
                 Date: o.order_date ?? "",
-                Shop: o.shops?.shop_name ?? "",
+                "Folder name": shopById.get(o.shop_id)?.folder_name ?? "",
+                "Label name": shopById.get(o.shop_id)?.label_name ?? "",
+                "Shop Area": areaName(shopById.get(o.shop_id)?.area_id),
                 "Order no": o.order_no,
                 ...Object.fromEntries(
                   labelProducts.map((lp) => [`${lp.short_name} sheets`, sheetsFor(o, lp.id)]),
@@ -423,7 +472,11 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">Shop</Label>
-                <ShopSelect value={shopId} onChange={setShopId} />
+                <ShopSelect
+                  value={shopId}
+                  onChange={setShopId}
+                  areaId={areaFilter !== "all" ? areaFilter : undefined}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Order date</Label>
@@ -502,6 +555,7 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Shop</TableHead>
+              <TableHead>Shop Area</TableHead>
               <TableHead className="text-right">No.</TableHead>
               {labelProducts.map((lp) => (
                 <TableHead key={lp.id} className="text-right">
@@ -516,7 +570,7 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
             {isLoading && (
               <TableRow>
                 <TableCell
-                  colSpan={labelProducts.length + 5}
+                  colSpan={labelProducts.length + 6}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Loading label orders…
@@ -526,43 +580,49 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
             {!isLoading && orders.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={labelProducts.length + 5}
+                  colSpan={labelProducts.length + 6}
                   className="py-12 text-center text-muted-foreground"
                 >
-                  No label orders {dateFilter ? `on ${dateLabel(dateFilter)}` : `in ${monthLabel(month)}`}.
+                  No label orders{" "}
+                  {dateFilter ? `on ${dateLabel(dateFilter)}` : `in ${monthLabel(month)}`}.
                 </TableCell>
               </TableRow>
             )}
-            {orders.map((o) => (
-              <TableRow key={o.id}>
-                <TableCell>{dateLabel(o.order_date)}</TableCell>
-                <TableCell className="font-medium">
-                  {o.shops?.shop_name ?? "—"}
-                  {o.shops?.label_name && (
-                    <p className="text-xs text-muted-foreground">{o.shops.label_name}</p>
-                  )}
-                </TableCell>
-                <TableCell className="num text-right">{o.order_no}</TableCell>
-                {labelProducts.map((lp) => (
-                  <TableCell key={lp.id} className="num text-right">
-                    {sheetsFor(o, lp.id) || "—"}
+            {orders.map((o) => {
+              const shop = shopById.get(o.shop_id);
+              const { primary, secondary } = shopDisplay(shop);
+              return (
+                <TableRow key={o.id}>
+                  <TableCell>{dateLabel(o.order_date)}</TableCell>
+                  <TableCell className="font-medium">
+                    {primary}
+                    {secondary && <p className="text-xs text-muted-foreground">{secondary}</p>}
                   </TableCell>
-                ))}
-                <TableCell className="num text-right font-semibold">
-                  {num(o.total_labels)}
-                </TableCell>
-                <TableCell>
-                  <button
-                    type="button"
-                    onClick={() => setOrderToDelete(o)}
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label={`Delete order ${o.order_no}`}
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </TableCell>
-              </TableRow>
-            ))}
+                  <TableCell className="text-sm text-muted-foreground">
+                    {areaName(shop?.area_id)}
+                  </TableCell>
+                  <TableCell className="num text-right">{o.order_no}</TableCell>
+                  {labelProducts.map((lp) => (
+                    <TableCell key={lp.id} className="num text-right">
+                      {sheetsFor(o, lp.id) || "—"}
+                    </TableCell>
+                  ))}
+                  <TableCell className="num text-right font-semibold">
+                    {num(o.total_labels)}
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      type="button"
+                      onClick={() => setOrderToDelete(o)}
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label={`Delete order ${o.order_no}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
@@ -576,7 +636,10 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
                 <p>Are you sure you want to delete this order? This will permanently remove it.</p>
                 {orderToDelete && (
                   <div className="num space-y-1 rounded-lg bg-secondary p-3">
-                    <DetailRow label="Shop" value={orderToDelete.shops?.shop_name ?? "—"} />
+                    <DetailRow
+                      label="Shop"
+                      value={shopDisplay(shopById.get(orderToDelete.shop_id)).primary}
+                    />
                     <DetailRow label="Order no" value={`#${orderToDelete.order_no}`} />
                     <DetailRow label="Order date" value={dateLabel(orderToDelete.order_date)} />
                     <div className="border-t border-border pt-1">

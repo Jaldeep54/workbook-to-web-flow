@@ -5,6 +5,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { FinancialYearPicker } from "@/components/financial-year-picker";
+import { MonthPicker } from "@/components/month-picker";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +43,15 @@ import {
   type InvestmentRow,
   type PayoutRow,
 } from "@/lib/queries";
-import { CASH_POSITION_PEOPLE, type CashPositionPerson } from "@/lib/domain";
+import {
+  CASH_POSITION_PEOPLE,
+  currentFinancialYear,
+  currentMonth,
+  defaultMonthForFinancialYear,
+  monthKey,
+  monthLabel,
+  type CashPositionPerson,
+} from "@/lib/domain";
 import { dateLabel, inr, todayISO } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/cash-position")({
@@ -142,11 +152,15 @@ function InvestmentsSection({
 }) {
   const qc = useQueryClient();
   const { data: investments = [], isLoading } = useQuery(investmentsQuery);
+  const [fy, setFy] = useState(currentFinancialYear());
+  const [month, setMonth] = useState(currentMonth());
   const [open, setOpen] = useState(false);
   const [investmentDate, setInvestmentDate] = useState(todayISO());
   const [amount, setAmount] = useState("");
   const [doneBy, setDoneBy] = useState<CashPositionPerson>("Bhavin");
   const [deleting, setDeleting] = useState<InvestmentRow | null>(null);
+
+  const filteredInvestments = investments.filter((row) => monthKey(row.investment_date) === month);
 
   const invalidateAll = () => {
     for (const key of CASH_POSITION_INVALIDATE_KEYS) void qc.invalidateQueries({ queryKey: [key] });
@@ -194,6 +208,15 @@ function InvestmentsSection({
           <StatCard label="By Bhavin" value={inr(byBhavin)} />
           <StatCard label="By Jaldeep" value={inr(byJaldeep)} />
         </div>
+        <FinancialYearPicker
+          value={fy}
+          onChange={(newFy) => {
+            setFy(newFy);
+            setMonth(defaultMonthForFinancialYear(newFy));
+          }}
+          dates={investments.map((row) => row.investment_date)}
+        />
+        <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -254,14 +277,14 @@ function InvestmentsSection({
                 </TableCell>
               </TableRow>
             )}
-            {!isLoading && investments.length === 0 && (
+            {!isLoading && filteredInvestments.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
-                  No investments recorded yet.
+                  No investments in {monthLabel(month)}.
                 </TableCell>
               </TableRow>
             )}
-            {investments.map((row) => (
+            {filteredInvestments.map((row) => (
               <TableRow key={row.id}>
                 <TableCell>{dateLabel(row.investment_date)}</TableCell>
                 <TableCell>{row.done_by}</TableCell>
@@ -307,11 +330,15 @@ function InvestmentsSection({
 function PayoutsSection({ total }: { total: number }) {
   const qc = useQueryClient();
   const { data: payouts = [], isLoading } = useQuery(payoutsQuery);
+  const [fy, setFy] = useState(currentFinancialYear());
+  const [month, setMonth] = useState(currentMonth());
   const [open, setOpen] = useState(false);
   const [payoutDate, setPayoutDate] = useState(todayISO());
   const [amount, setAmount] = useState("");
   const [doneBy, setDoneBy] = useState<CashPositionPerson>("Bhavin");
   const [deleting, setDeleting] = useState<PayoutRow | null>(null);
+
+  const filteredPayouts = payouts.filter((row) => monthKey(row.payout_date) === month);
 
   const invalidateAll = () => {
     for (const key of CASH_POSITION_INVALIDATE_KEYS) void qc.invalidateQueries({ queryKey: [key] });
@@ -357,6 +384,15 @@ function PayoutsSection({ total }: { total: number }) {
         <div className="flex-1">
           <StatCard label="Total paid out" value={inr(total)} tone="negative" />
         </div>
+        <FinancialYearPicker
+          value={fy}
+          onChange={(newFy) => {
+            setFy(newFy);
+            setMonth(defaultMonthForFinancialYear(newFy));
+          }}
+          dates={payouts.map((row) => row.payout_date)}
+        />
+        <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -417,14 +453,14 @@ function PayoutsSection({ total }: { total: number }) {
                 </TableCell>
               </TableRow>
             )}
-            {!isLoading && payouts.length === 0 && (
+            {!isLoading && filteredPayouts.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
-                  No payouts recorded yet.
+                  No payouts in {monthLabel(month)}.
                 </TableCell>
               </TableRow>
             )}
-            {payouts.map((row) => (
+            {filteredPayouts.map((row) => (
               <TableRow key={row.id}>
                 <TableCell>{dateLabel(row.payout_date)}</TableCell>
                 <TableCell>{row.done_by}</TableCell>

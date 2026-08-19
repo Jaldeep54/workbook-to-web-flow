@@ -5,6 +5,7 @@ import { Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { MonthPicker } from "@/components/month-picker";
 import { ShopAreaFilter, ShopFilter } from "@/components/filter-bar";
 import { StatCard } from "@/components/stat-card";
@@ -28,7 +29,13 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { shopsQuery } from "@/lib/queries";
 import { paymentsQuery, type PaymentRecord } from "@/lib/records";
-import { PAYMENT_STATUSES, currentMonth, monthLabel } from "@/lib/domain";
+import {
+  PAYMENT_STATUSES,
+  currentFinancialYear,
+  currentMonth,
+  defaultMonthForFinancialYear,
+  monthLabel,
+} from "@/lib/domain";
 import { dateLabel, inr } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 
@@ -53,6 +60,7 @@ export const Route = createFileRoute("/_authenticated/payments")({
 
 function PaymentsPage() {
   const qc = useQueryClient();
+  const [fy, setFy] = useState(currentFinancialYear());
   const [month, setMonth] = useState(currentMonth());
   const [shopFilter, setShopFilter] = useState("all");
   const [areaFilter, setAreaFilter] = useState("all");
@@ -97,9 +105,27 @@ function PaymentsPage() {
         description={`${payments.length} payments raised from deliveries in ${monthLabel(month)}`}
         actions={
           <>
-            <MonthPicker value={month} onChange={setMonth} />
-            <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
-            <ShopFilter value={shopFilter} onChange={setShopFilter} />
+            <FinancialYearPicker
+              value={fy}
+              onChange={(newFy) => {
+                setFy(newFy);
+                setMonth(defaultMonthForFinancialYear(newFy));
+              }}
+              dates={allPayments.map((p) => p.payment_date)}
+            />
+            <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
+            <ShopAreaFilter
+              value={areaFilter}
+              onChange={(area) => {
+                setAreaFilter(area);
+                setShopFilter("all");
+              }}
+            />
+            <ShopFilter
+              value={shopFilter}
+              onChange={setShopFilter}
+              areaId={areaFilter !== "all" ? areaFilter : undefined}
+            />
             <Button
               variant="outline"
               onClick={() =>

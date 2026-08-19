@@ -41,12 +41,15 @@ export function ShopSelect({
   value,
   onChange,
   placeholder = "Select shop",
+  areaId,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  areaId?: string | null;
 }) {
-  const { data: shops = [] } = useQuery(shopsQuery);
+  const { data: allShops = [] } = useQuery(shopsQuery);
+  const shops = areaId ? allShops.filter((s) => s.area_id === areaId) : allShops;
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger>

@@ -175,6 +175,64 @@ export function recentMonths(count = 18): string[] {
 }
 
 /**
+ * Financial Year (India-style, April -> March). A financial year is keyed by
+ * its starting calendar year as a string, e.g. "2026" = FY 2026-27
+ * (Apr 2026 - Mar 2027) — the same convention `month`/`monthKey` use of
+ * representing a period as a stable string key rather than a Date.
+ */
+export function financialYearKeyForDate(date: string | Date): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const year = d.getFullYear();
+  const month = d.getMonth(); // 0-based; April = 3
+  return String(month >= 3 ? year : year - 1);
+}
+
+export function currentFinancialYear(): string {
+  return financialYearKeyForDate(new Date());
+}
+
+export function financialYearLabel(fy: string): string {
+  const startYear = Number(fy);
+  const endYearShort = String((startYear + 1) % 100).padStart(2, "0");
+  return `FY ${startYear}-${endYearShort}`;
+}
+
+/** Inclusive ISO start/end dates for a financial year — Apr 1 to Mar 31. */
+export function financialYearRange(fy: string): { start: string; end: string } {
+  const startYear = Number(fy);
+  return { start: `${startYear}-04-01`, end: `${startYear + 1}-03-31` };
+}
+
+/** The 12 month keys (Apr -> Mar) belonging to a financial year, in calendar order. */
+export function monthsInFinancialYear(fy: string): string[] {
+  const startYear = Number(fy);
+  const months: string[] = [];
+  for (let m = 3; m <= 11; m += 1) months.push(`${startYear}-${String(m + 1).padStart(2, "0")}-01`);
+  for (let m = 0; m <= 2; m += 1)
+    months.push(`${startYear + 1}-${String(m + 1).padStart(2, "0")}-01`);
+  return months;
+}
+
+/**
+ * Builds the FY dropdown list from data actually present (plus the current
+ * FY, always, so there's something sensible to pick on a brand-new dataset)
+ * — same pattern MonthPicker uses for its month list.
+ */
+export function financialYearsFromDates(dates: Array<string | null | undefined>): string[] {
+  const set = new Set<string>([currentFinancialYear()]);
+  for (const d of dates) {
+    if (d) set.add(financialYearKeyForDate(d));
+  }
+  return Array.from(set).sort((a, b) => Number(b) - Number(a));
+}
+
+/** Current month if it falls in the given FY, otherwise the FY's first month (April). */
+export function defaultMonthForFinancialYear(fy: string): string {
+  const cm = currentMonth();
+  return financialYearKeyForDate(cm) === fy ? cm : monthsInFinancialYear(fy)[0];
+}
+
+/**
  * Shop Analysis / Shop Sales Indicator
  *
  * Rolling window length (in months, including the current month) used for every

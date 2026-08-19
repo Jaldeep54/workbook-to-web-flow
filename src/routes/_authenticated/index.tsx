@@ -16,6 +16,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -31,7 +32,7 @@ import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { currentMonth, monthLabel } from "@/lib/domain";
-import { inr, num } from "@/lib/format";
+import { inr, inrCompact, num } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 import { shopAreasQuery, shopsQuery, summaryByAreaQuery } from "@/lib/queries";
 
@@ -53,6 +54,35 @@ export const Route = createFileRoute("/_authenticated/")({
   }),
   component: Overview,
 });
+
+/** Small ₹-abbreviated label placed just outside each pie slice — tiny slices are skipped to avoid overlap. */
+function renderPieLabel(props: {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  outerRadius: number;
+  percent: number;
+  value: number;
+}) {
+  const { cx, cy, midAngle, outerRadius, percent, value } = props;
+  if (percent < 0.04) return null;
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 14;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="var(--color-muted-foreground)"
+      fontSize={11}
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+    >
+      {inrCompact(value)}
+    </text>
+  );
+}
 
 const CHART_COLORS = [
   "var(--color-chart-1)",
@@ -206,7 +236,14 @@ function Overview() {
                     borderRadius: 12,
                   }}
                 />
-                <Bar dataKey="Sales" fill="var(--color-chart-1)" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="Sales" fill="var(--color-chart-1)" radius={[6, 6, 0, 0]}>
+                  <LabelList
+                    dataKey="Sales"
+                    position="top"
+                    fontSize={11}
+                    formatter={(v: number) => inrCompact(v)}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -227,6 +264,8 @@ function Overview() {
                   innerRadius={60}
                   outerRadius={95}
                   paddingAngle={3}
+                  label={renderPieLabel}
+                  labelLine={{ stroke: "var(--color-border)" }}
                 >
                   {productMixPie.map((entry, i) => (
                     <Cell key={entry.name} fill={CHART_COLORS[i % CHART_COLORS.length]} />

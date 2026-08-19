@@ -1,10 +1,12 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowLeft, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { FinancialYearPicker } from "@/components/financial-year-picker";
+import { MonthPicker } from "@/components/month-picker";
 import { NewOrderDialog } from "@/components/new-order-dialog";
 import { ShopAnalysisTab } from "@/components/shop-analysis";
 import { StatCard } from "@/components/stat-card";
@@ -44,7 +46,14 @@ import {
   shopsQuery,
 } from "@/lib/queries";
 import { dateLabel, inr, num, todayISO } from "@/lib/format";
-import { ORDER_STATUSES } from "@/lib/domain";
+import {
+  ORDER_STATUSES,
+  currentFinancialYear,
+  currentMonth,
+  defaultMonthForFinancialYear,
+  monthKey,
+  monthLabel,
+} from "@/lib/domain";
 
 export const Route = createFileRoute("/_authenticated/shops/$shopId")({
   head: () => ({
@@ -124,6 +133,11 @@ function ShopDetail() {
   const [receivingPayment, setReceivingPayment] = useState<HistoryPayment | null>(null);
   const [collectedBy, setCollectedBy] = useState("");
   const [collectedDate, setCollectedDate] = useState("");
+
+  const [orderFy, setOrderFy] = useState(currentFinancialYear());
+  const [orderMonth, setOrderMonth] = useState(currentMonth());
+  const [deliveryFy, setDeliveryFy] = useState(currentFinancialYear());
+  const [deliveryMonth, setDeliveryMonth] = useState(currentMonth());
 
   const history = useQuery({
     queryKey: ["shop_history", shopId],
@@ -232,6 +246,21 @@ function ShopDetail() {
   const qtyFor = (order: HistoryOrder, productId: string) =>
     order.order_lines.find((l) => l.product_id === productId)?.qty ?? 0;
 
+  const filteredOrders = useMemo(
+    () =>
+      (history.data?.orders ?? []).filter(
+        (o) => o.order_date && monthKey(o.order_date) === orderMonth,
+      ),
+    [history.data, orderMonth],
+  );
+  const filteredDeliveries = useMemo(
+    () =>
+      (history.data?.deliveries ?? []).filter(
+        (d) => d.delivery_date && monthKey(d.delivery_date) === deliveryMonth,
+      ),
+    [history.data, deliveryMonth],
+  );
+
   return (
     <>
       <Button asChild variant="ghost" size="sm" className="mb-3 -ml-2">
@@ -266,11 +295,22 @@ function ShopDetail() {
         </TabsList>
 
         <TabsContent value="orders" className="pt-4">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-semibold">Orders</h2>
-            <Button size="sm" onClick={() => setNewOrderOpen(true)}>
-              <Plus className="size-4" /> New Order
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <FinancialYearPicker
+                value={orderFy}
+                onChange={(fy) => {
+                  setOrderFy(fy);
+                  setOrderMonth(defaultMonthForFinancialYear(fy));
+                }}
+                dates={(history.data?.orders ?? []).map((o) => o.order_date)}
+              />
+              <MonthPicker value={orderMonth} onChange={setOrderMonth} financialYear={orderFy} />
+              <Button size="sm" onClick={() => setNewOrderOpen(true)}>
+                <Plus className="size-4" /> New Order
+              </Button>
+            </div>
           </div>
           <div className="surface-card overflow-x-auto">
             <Table>
@@ -288,7 +328,7 @@ function ShopDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(history.data?.orders ?? []).map((o) => (
+                {filteredOrders.map((o) => (
                   <TableRow key={o.id}>
                     <TableCell>{dateLabel(o.order_date)}</TableCell>
                     <TableCell>{dateLabel(o.delivery_date)}</TableCell>
@@ -303,13 +343,13 @@ function ShopDetail() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {(history.data?.orders ?? []).length === 0 && (
+                {filteredOrders.length === 0 && (
                   <TableRow>
                     <TableCell
                       colSpan={products.length + 4}
                       className="py-10 text-center text-muted-foreground"
                     >
-                      No orders yet.
+                      No orders in {monthLabel(orderMonth)}.
                     </TableCell>
                   </TableRow>
                 )}
@@ -319,6 +359,21 @@ function ShopDetail() {
         </TabsContent>
 
         <TabsContent value="deliveries" className="pt-4">
+          <div className="mb-3 flex items-center justify-end gap-2">
+            <FinancialYearPicker
+              value={deliveryFy}
+              onChange={(fy) => {
+                setDeliveryFy(fy);
+                setDeliveryMonth(defaultMonthForFinancialYear(fy));
+              }}
+              dates={(history.data?.deliveries ?? []).map((d) => d.delivery_date)}
+            />
+            <MonthPicker
+              value={deliveryMonth}
+              onChange={setDeliveryMonth}
+              financialYear={deliveryFy}
+            />
+          </div>
           <div className="surface-card overflow-x-auto">
             <Table>
               <TableHeader>
@@ -332,14 +387,16 @@ function ShopDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(history.data?.deliveries ?? []).map((d) => (
+                {filteredDeliveries.map((d) => (
                   <TableRow key={d.id}>
                     <TableCell>{dateLabel(d.delivery_date)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Select
                           value={d.status ?? "Pending"}
-                          onValueChange={(status) => setDeliveryStatus.mutate({ delivery: d, status })}
+                          onValueChange={(status) =>
+                            setDeliveryStatus.mutate({ delivery: d, status })
+                          }
                         >
                           <SelectTrigger className="w-[130px]">
                             <SelectValue />
@@ -361,10 +418,10 @@ function ShopDetail() {
                     <TableCell className="num text-right font-semibold">{inr(d.profit)}</TableCell>
                   </TableRow>
                 ))}
-                {(history.data?.deliveries ?? []).length === 0 && (
+                {filteredDeliveries.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                      No deliveries yet.
+                      No deliveries in {monthLabel(deliveryMonth)}.
                     </TableCell>
                   </TableRow>
                 )}
@@ -468,10 +525,7 @@ function ShopDetail() {
         onSaved={() => void history.refetch()}
       />
 
-      <Dialog
-        open={!!receivingPayment}
-        onOpenChange={(o) => !o && setReceivingPayment(null)}
-      >
+      <Dialog open={!!receivingPayment} onOpenChange={(o) => !o && setReceivingPayment(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Mark payment received</DialogTitle>

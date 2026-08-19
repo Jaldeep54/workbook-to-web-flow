@@ -15,7 +15,12 @@ import {
 
 import { ProductChips } from "@/components/product-multi-select";
 import { StatCard } from "@/components/stat-card";
-import { shopAnalysisQuery, type ShopAnalysis, type ShopAnalysisMixRow } from "@/lib/queries";
+import {
+  shopAnalysisQuery,
+  skuOpportunityQuery,
+  type ShopAnalysis,
+  type ShopAnalysisMixRow,
+} from "@/lib/queries";
 import { inr } from "@/lib/format";
 
 const CHART_COLORS = [
@@ -103,6 +108,9 @@ function ProductMixPie({
 /** Shop Analysis: product mix, order frequency and monthly sales, this shop vs its Shop Area peers. */
 export function ShopAnalysisTab({ shopId }: { shopId: string }) {
   const { data, isLoading, error } = useQuery(shopAnalysisQuery(shopId));
+  const { data: skuOpportunity = [] } = useQuery(skuOpportunityQuery);
+  const inactiveProducts =
+    skuOpportunity.find((r) => r.shop_id === shopId)?.inactive_products ?? [];
 
   if (isLoading) {
     return (
@@ -144,14 +152,36 @@ export function ShopAnalysisTab({ shopId }: { shopId: string }) {
         </p>
       </div>
 
-      <div className="surface-card p-5">
-        <h3 className="text-sm font-semibold">Active Products</h3>
-        <div className="mt-3">
-          {data.activeProducts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No products assigned to this shop.</p>
-          ) : (
-            <ProductChips names={data.activeProducts.map((p) => p.shortName)} />
-          )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="surface-card p-5">
+          <h3 className="text-sm font-semibold">
+            Active Products{" "}
+            <span className="text-xs font-normal text-muted-foreground">— this shop sells</span>
+          </h3>
+          <div className="mt-3">
+            {data.activeProducts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No products assigned to this shop.</p>
+            ) : (
+              <ProductChips names={data.activeProducts.map((p) => p.shortName)} />
+            )}
+          </div>
+        </div>
+        <div className="surface-card p-5">
+          <h3 className="text-sm font-semibold">
+            Inactive Products{" "}
+            <span className="text-xs font-normal text-muted-foreground">
+              — not currently sold here
+            </span>
+          </h3>
+          <div className="mt-3">
+            {inactiveProducts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                This shop already sells every product.
+              </p>
+            ) : (
+              <ProductChips names={inactiveProducts} />
+            )}
+          </div>
         </div>
       </div>
 

@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { MonthPicker } from "@/components/month-picker";
-import { ShopAreaFilter, ShopFilter, ShopSelect } from "@/components/filter-bar";
+import { ShopAreaFilter, ShopFilter } from "@/components/filter-bar";
+import { SearchableShopSelect } from "@/components/shop-select";
 import { LabelOrderSuggestionTab } from "@/components/label-order-suggestion";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
@@ -277,6 +278,7 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
   const [dateFilter, setDateFilter] = useState("");
   const [open, setOpen] = useState(false);
   const [shopId, setShopId] = useState("");
+  const [dialogAreaFilter, setDialogAreaFilter] = useState("all");
   const [orderDate, setOrderDate] = useState(todayISO());
   const [sheets, setSheets] = useState<Record<string, number>>({});
   const [orderToDelete, setOrderToDelete] = useState<LabelOrderRecord | null>(null);
@@ -459,7 +461,16 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
         >
           <Download className="size-4" /> Export
         </Button>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+          open={open}
+          onOpenChange={(o) => {
+            setOpen(o);
+            if (o) {
+              setDialogAreaFilter("all");
+              setShopId("");
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <Plus className="size-4" /> New label order
@@ -470,13 +481,25 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
               <DialogTitle>New label order</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Shop</Label>
-                <ShopSelect
-                  value={shopId}
-                  onChange={setShopId}
-                  areaId={areaFilter !== "all" ? areaFilter : undefined}
-                />
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Shop area</Label>
+                  <ShopAreaFilter
+                    value={dialogAreaFilter}
+                    onChange={(area) => {
+                      setDialogAreaFilter(area);
+                      setShopId("");
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Shop</Label>
+                  <SearchableShopSelect
+                    value={shopId}
+                    onChange={setShopId}
+                    areaId={dialogAreaFilter !== "all" ? dialogAreaFilter : null}
+                  />
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Order date</Label>

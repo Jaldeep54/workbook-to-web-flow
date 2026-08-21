@@ -1,0 +1,7 @@
+# Keep line endings consistent across platforms — the toolchain (Prettier,
+# ESLint) is configured for LF.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.pdf binary

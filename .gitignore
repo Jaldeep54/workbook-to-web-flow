@@ -7,19 +7,17 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies and build output
 node_modules
 dist
 dist-ssr
+build
 .output
-.vinxi
-.tanstack/**
-.nitro
-.vercel
 *.local
 
-# Wrangler / Cloudflare
-.wrangler/
-.dev.vars
+# Backend runtime artefacts
+backend/uploads/
+backend/tests/.uploads/
 
 # Environment variables (never commit real credentials)
 .env

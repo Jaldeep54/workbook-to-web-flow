@@ -17,7 +17,7 @@ export async function connectDatabase(uri: string = env.MONGODB_URI): Promise<ty
   const connection = await mongoose.connect(uri, {
     dbName: env.MONGODB_DB_NAME,
     serverSelectionTimeoutMS: 10_000,
-    maxPoolSize: 20,
+    maxPoolSize: env.MONGODB_MAX_POOL_SIZE,
   });
 
   if (!isTest) {

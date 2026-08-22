@@ -1,9 +1,7 @@
-import { createReadStream, existsSync } from "node:fs";
-import path from "node:path";
 import type { Request, Response } from "express";
 
 import { buildBills } from "../services/bill.service.js";
-import { absolutePathForKey, verifySignedImage } from "../services/file.service.js";
+import { openShopImage, verifySignedImage } from "../services/file.service.js";
 import { importWorkbook } from "../services/import.service.js";
 import { ApiError } from "../utils/api-error.js";
 import { ok } from "../utils/api-response.js";
@@ -34,14 +32,6 @@ export async function uploadWorkbook(req: Request, res: Response) {
 
 /* ------------------------------------------------------------------- files */
 
-const CONTENT_TYPES: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  heic: "image/heic",
-  heif: "image/heif",
-};
-
 /**
  * Serves a shop image against a short-lived signed URL rather than a bearer
  * token, because an `<img src>` can't carry an Authorization header. The
@@ -52,11 +42,8 @@ export async function serveShopImage(req: Request, res: Response) {
   const key = `${req.params.shopId}/${req.params.filename}`;
   verifySignedImage(key, String(req.query.expires ?? ""), String(req.query.signature ?? ""));
 
-  const absolute = absolutePathForKey(key);
-  if (!existsSync(absolute)) throw ApiError.notFound("Image not found");
-
-  const ext = path.extname(absolute).slice(1).toLowerCase();
-  res.setHeader("content-type", CONTENT_TYPES[ext] ?? "application/octet-stream");
+  const { stream, contentType } = await openShopImage(key);
+  res.setHeader("content-type", contentType);
   res.setHeader("cache-control", "private, max-age=3600");
-  createReadStream(absolute).pipe(res);
+  stream.pipe(res);
 }

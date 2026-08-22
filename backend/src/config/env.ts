@@ -18,6 +18,12 @@ const schema = z.object({
 
   MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
   MONGODB_DB_NAME: z.string().optional(),
+  /**
+   * Connections held per process. A long-lived server wants a healthy pool; a
+   * serverless platform runs many short-lived instances against the same
+   * cluster, so each one should hold only a handful.
+   */
+  MONGODB_MAX_POOL_SIZE: z.coerce.number().int().positive().default(20),
 
   JWT_ACCESS_SECRET: z.string().min(16, "JWT_ACCESS_SECRET must be at least 16 characters"),
   JWT_REFRESH_SECRET: z.string().min(16, "JWT_REFRESH_SECRET must be at least 16 characters"),
@@ -30,7 +36,12 @@ const schema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: booleanish.optional(),
 
-  /** Where uploaded shop images are written, relative to the backend package root. */
+  /**
+   * Where shop photos live. "disk" writes under UPLOAD_DIR; "gridfs" stores
+   * them in MongoDB, which is what a read-only serverless filesystem needs.
+   */
+  FILE_STORAGE: z.enum(["disk", "gridfs"]).default(process.env.VERCEL ? "gridfs" : "disk"),
+  /** Where uploaded shop images are written, relative to the backend package root. Disk storage only. */
   UPLOAD_DIR: z.string().default("uploads"),
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
   /** Signing key for short-lived file URLs; falls back to the access secret. */
@@ -81,5 +92,7 @@ export const isTest = env.NODE_ENV === "test";
 export const corsOrigins = env.CORS_ORIGINS.split(",")
   .map((o) => o.trim())
   .filter(Boolean);
+
+export const isServerless = Boolean(process.env.VERCEL);
 
 export const fileUrlSecret = env.FILE_URL_SECRET ?? env.JWT_ACCESS_SECRET;

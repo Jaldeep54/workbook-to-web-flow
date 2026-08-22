@@ -112,6 +112,7 @@ It refuses to run when `NODE_ENV=production`.
 | `LOG_LEVEL` | `info` | `silent` \| `error` \| `warn` \| `info` \| `debug` |
 | `MONGODB_URI` | — | **Required.** Connection string |
 | `MONGODB_DB_NAME` | — | Database name, when not in the URI |
+| `MONGODB_MAX_POOL_SIZE` | `20` | Connections held per process — drop to ~5 on serverless |
 | `JWT_ACCESS_SECRET` | — | **Required.** Signs access tokens |
 | `JWT_REFRESH_SECRET` | — | **Required.** Signs/validates refresh tokens |
 | `JWT_ACCESS_EXPIRES_IN` | `15m` | Access token lifetime |
@@ -120,7 +121,8 @@ It refuses to run when `NODE_ENV=production`.
 | `CORS_ORIGINS` | `http://localhost:8080` | Comma-separated allowed origins |
 | `COOKIE_DOMAIN` | — | Cookie domain in production |
 | `COOKIE_SECURE` | follows `NODE_ENV` | Force secure cookies on/off |
-| `UPLOAD_DIR` | `uploads` | Where shop photos are written |
+| `FILE_STORAGE` | `disk` (`gridfs` on Vercel) | `disk` \| `gridfs` — where shop photos are stored |
+| `UPLOAD_DIR` | `uploads` | Where shop photos are written (`disk` only) |
 | `MAX_UPLOAD_BYTES` | `10485760` | Upload size limit (10 MB) |
 | `FILE_URL_TTL_SECONDS` | `3600` | Lifetime of a signed image URL |
 | `FILE_URL_SECRET` | access secret | Signs image URLs |
@@ -137,7 +139,7 @@ It refuses to run when `NODE_ENV=production`.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `VITE_API_BASE_URL` | `http://localhost:4000/api/v1` | API base URL |
+| `VITE_API_BASE_URL` | `http://localhost:4000/api/v1` | API base URL — absolute, or origin-relative (`/api/v1`) when the host proxies `/api` to the API |
 | `VITE_GOOGLE_MAPS_API_KEY` | — | Maps JavaScript / Places / Geocoding |
 
 ## 6. Deployment
@@ -154,8 +156,9 @@ Checklist:
 - `CORS_ORIGINS` set to the deployed frontend origin(s) — never `*`
 - `COOKIE_SECURE=true` and HTTPS in front of the API, so the refresh cookie is
   only ever sent over TLS
-- `UPLOAD_DIR` on a persistent volume, or a mounted network share, if shop
-  photos must survive redeploys
+- `FILE_STORAGE=disk` with `UPLOAD_DIR` on a persistent volume (or a mounted
+  network share) if shop photos must survive redeploys — otherwise
+  `FILE_STORAGE=gridfs`, which keeps them in MongoDB and needs no volume
 - run `npm run seed` once against the production database
 
 **Frontend** — `npm run build` produces a static `dist/` for Vercel, Netlify,
@@ -165,3 +168,9 @@ S3/CloudFront, nginx… Configure a SPA fallback (rewrite unknown paths to
 **Google Maps** — the shop location picker and "Shops on Map" use Maps
 JavaScript, Places and Geocoding. Restrict the key in Google Cloud Console to
 your domains (HTTP referrers) and to those three APIs.
+
+## 7. Deploying to Vercel
+
+Two Vercel projects from this one repository — the API and the web app —
+wired so the browser only ever talks to one origin. See
+[docs/VERCEL.md](VERCEL.md) for the full walkthrough.

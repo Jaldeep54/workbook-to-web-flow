@@ -40,6 +40,11 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Absolute (`https://api.example.com/api/v1`) or origin-relative (`/api/v1`).
+ * The relative form is what a same-origin deployment uses — the host rewrites
+ * `/api/*` to the API — and it keeps the refresh cookie first-party.
+ */
 export const API_BASE_URL: string =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
   "http://localhost:4000/api/v1";
@@ -104,7 +109,11 @@ type RequestOptions = {
 };
 
 function buildUrl(path: string, query?: RequestOptions["query"]): string {
-  const url = new URL(`${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`);
+  // `new URL` needs a base when API_BASE_URL is origin-relative.
+  const url = new URL(
+    `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`,
+    typeof window === "undefined" ? "http://localhost" : window.location.origin,
+  );
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value === undefined || value === null || value === "") continue;
     url.searchParams.set(key, String(value));
@@ -200,7 +209,11 @@ export const api = {
     apiRequestWithMeta<T>(path, { query }),
 };
 
-/** Absolute URL for a signed file path returned by the API. */
+/**
+ * Resolves a signed file path returned by the API against the API's own origin.
+ * With a relative base the result stays relative, which is exactly right — the
+ * host rewrites it to the API just like every other call.
+ */
 export function fileUrl(signedPath: string): string {
   if (/^https?:\/\//.test(signedPath)) return signedPath;
   const origin = API_BASE_URL.replace(/\/api\/v1$/, "");

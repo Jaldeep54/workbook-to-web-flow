@@ -17,6 +17,7 @@ delete a record) is enforced again by the API on each request.
 ## Documentation
 
 - [docs/SETUP.md](docs/SETUP.md) — install, run, environment variables, deployment
+- [docs/VERCEL.md](docs/VERCEL.md) — deploying the API and the web app to Vercel
 - [docs/API.md](docs/API.md) — every endpoint, with request/response shapes
 - [docs/RBAC.md](docs/RBAC.md) — how roles and permissions work, and how to extend them
 - [docs/MIGRATION.md](docs/MIGRATION.md) — moving data from Supabase/Postgres to MongoDB

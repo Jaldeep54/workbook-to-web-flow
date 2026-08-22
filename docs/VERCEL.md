@@ -91,6 +91,15 @@ Set on `klinzo-ops`:
 does the rest. `VITE_` variables are baked in at build time, so changing one
 needs a redeploy, not just a restart.
 
+**Do not set `VITE_API_BASE_URL` from Git Bash.** MSYS rewrites anything shaped
+like a POSIX path on its way to a native program, so `/api/v1` arrives as
+`C:/Program Files/Git/api/v1` — and because the value is compiled into the
+bundle, the app then tries to fetch `file:///C:/Program Files/Git/api/v1/auth/login`
+and every request fails before it leaves the browser. Set it from PowerShell,
+from the Vercel dashboard, or with `MSYS_NO_PATHCONV=1`. It is stored as a plain
+(unencrypted) variable precisely so it can be read back and checked; anything
+compiled into a public bundle is not a secret.
+
 A connection string, both JWT secrets and the admin password reach Vercel as
 plain environment variables. Rotating the two JWT secrets invalidates every
 issued token, which is the point if one ever leaks.

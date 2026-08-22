@@ -32,7 +32,30 @@ async function ready() {
   await connecting;
 }
 
+/**
+ * Rebuilds the path Express expects.
+ *
+ * `vercel.json` rewrites `/api/(?<rest>.*)` here and passes the captured tail
+ * as a `rest` query parameter, because the rewrite is free to hand us the
+ * destination path (`/api`) rather than the one the browser asked for. Express
+ * routes on `/api/v1/...`, so put that back and drop the marker — anything
+ * else in the query string is the caller's and stays untouched.
+ *
+ * A file-based catch-all would be the obvious alternative, but Vercel matches
+ * `api/[...slug].js` against a single path segment, so `/api/v1/health` never
+ * reaches it.
+ */
+function restorePath(req) {
+  const url = new URL(req.url, "http://localhost");
+  const rest = url.searchParams.get("rest");
+  if (rest === null) return;
+  url.searchParams.delete("rest");
+  const query = url.searchParams.toString();
+  req.url = `/api/${rest}${query ? `?${query}` : ""}`;
+}
+
 export default async function handler(req, res) {
+  restorePath(req);
   await ready();
   app ??= createApp();
   return app(req, res);

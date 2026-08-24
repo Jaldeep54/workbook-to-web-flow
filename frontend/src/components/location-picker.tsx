@@ -3,6 +3,7 @@ import { ClientOnly } from "@tanstack/react-router";
 import { LocateFixed, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 
+import { MapUnavailable, useMapsUnavailableReason } from "@/components/map-unavailable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +38,7 @@ export function LocationPicker({
   longitude: number | null;
   onLocationChange: (loc: { latitude: number; longitude: number; address?: string }) => void;
 }) {
+  const mapsUnavailable = useMapsUnavailableReason();
   const [query, setQuery] = useState(address);
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [searching, setSearching] = useState(false);
@@ -47,12 +49,14 @@ export function LocationPicker({
   const skipNextSearchRef = useRef(false);
 
   useEffect(() => {
+    if (mapsUnavailable) return;
     void createAutocompleteSession().then((token) => {
       sessionRef.current = token;
     });
-  }, []);
+  }, [mapsUnavailable]);
 
   useEffect(() => {
+    if (mapsUnavailable) return;
     if (skipNextSearchRef.current) {
       skipNextSearchRef.current = false;
       setSuggestions([]);
@@ -106,7 +110,7 @@ export function LocationPicker({
     setLocating(true);
     try {
       const pos = await getCurrentPosition();
-      const label = await reverseGeocode(pos.latitude, pos.longitude);
+      const label = mapsUnavailable ? null : await reverseGeocode(pos.latitude, pos.longitude);
       onLocationChange(label ? { ...pos, address: label } : pos);
       if (label) {
         skipNextSearchRef.current = true;
@@ -126,9 +130,12 @@ export function LocationPicker({
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
           <Input
-            placeholder="Search for the shop address…"
+            placeholder={
+              mapsUnavailable ? "Address search needs a Maps key" : "Search for the shop address…"
+            }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            disabled={!!mapsUnavailable}
           />
           <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
             {searching ? (
@@ -173,21 +180,101 @@ export function LocationPicker({
       )}
 
       <div className="h-64 overflow-hidden rounded-md border border-border">
-        <Suspense fallback={<MapFallback />}>
-          <ClientOnly fallback={<MapFallback />}>
-            <ShopLocationMap
-              latitude={latitude}
-              longitude={longitude}
-              onChange={(lat, lng) => onLocationChange({ latitude: lat, longitude: lng })}
-            />
-          </ClientOnly>
-        </Suspense>
+        {mapsUnavailable ? (
+          <MapUnavailable reason={mapsUnavailable} />
+        ) : (
+          <Suspense fallback={<MapFallback />}>
+            <ClientOnly fallback={<MapFallback />}>
+              <ShopLocationMap
+                latitude={latitude}
+                longitude={longitude}
+                onChange={(lat, lng) => onLocationChange({ latitude: lat, longitude: lng })}
+              />
+            </ClientOnly>
+          </Suspense>
+        )}
       </div>
+
+      {/* Always available, and the only way to set a location while the map is
+          down — paste the coordinates out of the Google Maps app. */}
+      <ManualCoordinates
+        latitude={latitude}
+        longitude={longitude}
+        onLocationChange={onLocationChange}
+      />
+
       <p className="text-xs text-muted-foreground">
         {latitude != null && longitude != null
-          ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)} — click the map or drag the pin to fine-tune`
-          : "Search an address, use your current location, or click the map to place a pin."}
+          ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}${mapsUnavailable ? "" : " — click the map or drag the pin to fine-tune"}`
+          : mapsUnavailable
+            ? "Use your current location, or type the coordinates in below."
+            : "Search an address, use your current location, or click the map to place a pin."}
       </p>
+    </div>
+  );
+}
+
+const COORD_PAIR = /^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/;
+
+/**
+ * Type or paste "21.170240, 72.831062" — the format Google Maps itself copies
+ * to the clipboard. Keeps a shop's location editable when the map can't load.
+ */
+function ManualCoordinates({
+  latitude,
+  longitude,
+  onLocationChange,
+}: {
+  latitude: number | null;
+  longitude: number | null;
+  onLocationChange: (loc: { latitude: number; longitude: number }) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const apply = () => {
+    const match = COORD_PAIR.exec(draft);
+    if (!match) {
+      setError("Enter coordinates as latitude, longitude — e.g. 21.170240, 72.831062");
+      return;
+    }
+    const lat = Number(match[1]);
+    const lng = Number(match[2]);
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setError("Latitude must be between -90 and 90, longitude between -180 and 180");
+      return;
+    }
+    setError(null);
+    setDraft("");
+    onLocationChange({ latitude: lat, longitude: lng });
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Input
+          placeholder={
+            latitude != null && longitude != null
+              ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+              : "Or paste coordinates: 21.170240, 72.831062"
+          }
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              apply();
+            }
+          }}
+        />
+        <Button type="button" variant="outline" onClick={apply} disabled={!draft.trim()}>
+          Set pin
+        </Button>
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }

@@ -6,7 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
 
-import { loadCoreLibrary, loadMapsLibrary, loadMarkerLibrary } from "@/lib/google-maps-loader";
+import { MapUnavailable } from "@/components/map-unavailable";
+import {
+  MAPS_LOAD_FAILED,
+  loadCoreLibrary,
+  loadMapsLibrary,
+  loadMarkerLibrary,
+} from "@/lib/google-maps-loader";
 import { googleMapsDirectionsUrl } from "@/lib/domain";
 import type { Shop } from "@/lib/domain";
 
@@ -169,16 +175,21 @@ export default function ShopsMapInner({ shops }: { shops: ShopWithLocation[] }) 
   const boundsCtorRef = useRef<typeof google.maps.LatLngBounds | null>(null);
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Create the map once.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [{ Map, InfoWindow }, { Marker }, { Size, Point, LatLngBounds }] = await Promise.all([
-        loadMapsLibrary(),
-        loadMarkerLibrary(),
-        loadCoreLibrary(),
-      ]);
+      let libraries;
+      try {
+        libraries = await Promise.all([loadMapsLibrary(), loadMarkerLibrary(), loadCoreLibrary()]);
+      } catch (error) {
+        // Without this the container just sits blank forever.
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : MAPS_LOAD_FAILED);
+        return;
+      }
+      const [{ Map, InfoWindow }, { Marker }, { Size, Point, LatLngBounds }] = libraries;
       if (cancelled || !containerRef.current) return;
 
       markerCtorRef.current = Marker;
@@ -255,6 +266,8 @@ export default function ShopsMapInner({ shops }: { shops: ShopWithLocation[] }) 
       infoWindow.close();
     };
   }, [ready, shops, router]);
+
+  if (loadError) return <MapUnavailable reason={loadError} />;
 
   return <div ref={containerRef} className="size-full" />;
 }

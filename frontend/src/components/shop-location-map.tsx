@@ -3,7 +3,8 @@
  * (see LocationPicker) so the Google Maps script only ever loads client-side.
  */
 import { useEffect, useRef, useState } from "react";
-import { loadMapsLibrary, loadMarkerLibrary } from "@/lib/google-maps-loader";
+import { MapUnavailable } from "@/components/map-unavailable";
+import { MAPS_LOAD_FAILED, loadMapsLibrary, loadMarkerLibrary } from "@/lib/google-maps-loader";
 
 const DEFAULT_CENTER = { lat: 20.5937, lng: 78.9629 }; // India, whole-country view
 const DEFAULT_ZOOM = 5;
@@ -26,12 +27,21 @@ export default function ShopLocationMapInner({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Create the map once.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [{ Map }, { Marker }] = await Promise.all([loadMapsLibrary(), loadMarkerLibrary()]);
+      let libraries;
+      try {
+        libraries = await Promise.all([loadMapsLibrary(), loadMarkerLibrary()]);
+      } catch (error) {
+        // Without this the container just sits blank forever.
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : MAPS_LOAD_FAILED);
+        return;
+      }
+      const [{ Map }, { Marker }] = libraries;
       if (cancelled || !containerRef.current) return;
       markerCtorRef.current = Marker;
       const map = new Map(containerRef.current, {
@@ -75,6 +85,8 @@ export default function ShopLocationMapInner({
       markerRef.current = marker;
     }
   }, [ready, latitude, longitude]);
+
+  if (loadError) return <MapUnavailable reason={loadError} />;
 
   return <div ref={containerRef} className="size-full" />;
 }

@@ -131,6 +131,11 @@ will not render until a key is created, restricted in Google Cloud Console to
 `https://klinzo-ops.vercel.app` (HTTP referrers) and to the Maps JavaScript,
 Places and Geocoding APIs, and added to the `klinzo-ops` project.
 
+Until then both views say so on screen rather than showing an empty box, and a
+shop's coordinates can still be captured from the device's location or pasted
+in by hand — so the missing key costs the address autocomplete and the map, not
+the ability to record where a shop is.
+
 **Atlas network access is open to `0.0.0.0/0`.** Vercel functions have no fixed
 IP, so this is the usual trade-off; the database user's password is the only
 thing protecting it. Atlas's Vercel integration narrows this if you want it

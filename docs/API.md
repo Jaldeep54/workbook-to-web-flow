@@ -126,6 +126,7 @@ still assigned to users can't be deleted (409).
 | GET | `/shops` | `shops:view` |
 | GET | `/shops/next-code` | `shops:create` |
 | GET | `/shops/products` | `shops:view` |
+| GET | `/shops/handlers` | `shops:view` |
 | POST | `/shops` | `shops:create` |
 | GET | `/shops/:id` | `shops:view` |
 | PATCH | `/shops/:id` | `shops:update` |
@@ -144,6 +145,14 @@ still assigned to users can't be deleted (409).
   `code`, `created_at`, `joined_on`, `design_type`.
 - Creating or updating a shop takes `product_ids` — the products it works with
   are saved with the shop.
+- `area_id`, `shop_name` and a non-empty `product_ids` are required: every area
+  filter, every shop label and everything orderable depends on them.
+- `GET /shops/handlers` lists who a shop can be "Handled by" — the active users
+  of every role with `handlesShops` (see [RBAC.md](RBAC.md)). It is guarded by
+  `shops:view`, not `users:view`, so editing a shop doesn't require access to
+  the user directory. Passing `handled_by_user_id` on create/update copies that
+  user's name into `handled_by`, which is what every screen reads; the name
+  therefore survives the account being deactivated or deleted.
 - `POST /shops/:id/image` is `multipart/form-data` with an `image` field
   (JPG/PNG/HEIC/HEIF). Responses carry `image_url`, a short-lived signed link.
 - `DELETE /shops/:id` only succeeds for a shop with no trading history;
@@ -191,6 +200,10 @@ Filters: `?month=&shopId=&areaId=&date=&status=&pending=true`
   "notes": null,
   "order_lines": [{ "product_id": "…", "qty": 12 }] }
 ```
+
+A shop takes at most one order per calendar day: a second `POST` for the same
+`shop_id` and `order_date` answers 409, as does a `PUT` that moves an order onto
+a day that shop already has one (an order never clashes with itself).
 
 Order numbers are assigned per shop by the server. `PATCH /:id/status` with
 `{"status":"Delivered"}` freezes the money figures onto a delivery and raises

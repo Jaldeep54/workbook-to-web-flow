@@ -169,6 +169,11 @@ S3/CloudFront, nginx… Configure a SPA fallback (rewrite unknown paths to
 JavaScript, Places and Geocoding. Restrict the key in Google Cloud Console to
 your domains (HTTP referrers) and to those three APIs.
 
+Maps are optional. With no key (or a key Google rejects) both map views explain
+what is wrong instead of sitting blank, and a shop's location can still be set
+from the browser's own geolocation or by pasting `latitude, longitude` — the
+format the Google Maps app copies — into the coordinate box under the map.
+
 ## 7. Deploying to Vercel
 
 Two Vercel projects from this one repository — the API and the web app —

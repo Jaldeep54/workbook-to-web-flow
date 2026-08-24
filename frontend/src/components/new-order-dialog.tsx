@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { ordersApi } from "@/services/klinzo.service";
 import { productsQuery, shopAreasQuery, shopProductsQuery, shopsQuery } from "@/lib/queries";
-import { type OrderRecord } from "@/lib/records";
+import { ordersOnDateQuery, type OrderRecord } from "@/lib/records";
 import { sumQty, type QtyMap } from "@/lib/domain";
 import { num, todayISO } from "@/lib/format";
 
@@ -33,6 +33,7 @@ export function NewOrderDialog({
   onOpenChange,
   editing,
   lockedShopId,
+  defaultAreaId,
   onSaved,
 }: {
   open: boolean;
@@ -40,6 +41,8 @@ export function NewOrderDialog({
   editing: OrderRecord | null;
   /** When set, the shop can't be changed and is preselected to this shop. */
   lockedShopId?: string;
+  /** Area the form opens on — the Orders page passes its own area filter through. */
+  defaultAreaId?: string | null;
   /** Called after a successful save, in addition to the standard query invalidation. */
   onSaved?: () => void;
 }) {
@@ -60,7 +63,7 @@ export function NewOrderDialog({
   // an existing one being edited, or a shop locked in from Shop Details.
   useEffect(() => {
     if (!open) return;
-    setAreaFilter("all");
+    setAreaFilter(defaultAreaId ?? "all");
     if (editing) {
       setShopId(editing.shop_id);
       setOrderDate(editing.order_date ?? todayISO());
@@ -78,7 +81,27 @@ export function NewOrderDialog({
       setQty({});
       setNotes("");
     }
-  }, [open, editing, lockedShopId]);
+  }, [open, editing, lockedShopId, defaultAreaId]);
+
+  /**
+   * A shop takes at most one order per day, so any shop that already has one
+   * on the chosen order date drops out of the picker — and comes back as soon
+   * as the date moves. The API enforces the same rule (see the orders
+   * controller), this just stops the user reaching a doomed save.
+   */
+  const { data: ordersOnDate = [] } = useQuery(ordersOnDateQuery(open ? orderDate : null));
+  const shopsAlreadyOrdered = useMemo(() => {
+    const taken = new Set(ordersOnDate.map((o) => o.shop_id));
+    // The order being edited never blocks its own shop.
+    if (editing) taken.delete(editing.shop_id);
+    return taken;
+  }, [ordersOnDate, editing]);
+
+  // If the date moves onto a day the selected shop has already ordered on,
+  // clear the selection rather than letting the save fail at the API.
+  useEffect(() => {
+    if (shopId && !lockedShopId && shopsAlreadyOrdered.has(shopId)) setShopId("");
+  }, [shopsAlreadyOrdered, shopId, lockedShopId]);
 
   const selectedShop = useMemo(() => shops.find((s) => s.id === shopId), [shops, shopId]);
   const selectedShopAreaName = useMemo(() => {
@@ -179,6 +202,8 @@ export function NewOrderDialog({
                     value={shopId}
                     onChange={setShopId}
                     areaId={areaFilter !== "all" ? areaFilter : null}
+                    excludeShopIds={shopsAlreadyOrdered}
+                    emptyMessage={`Every shop here already has an order on ${orderDate}.`}
                   />
                 </div>
               </div>
@@ -186,6 +211,14 @@ export function NewOrderDialog({
             {shopId && (
               <p className="text-xs text-muted-foreground">
                 Area: {selectedShopAreaName ?? "Not Assigned"}
+              </p>
+            )}
+            {/* The picker hides clashing shops, but a locked shop can't be
+                swapped — say so here rather than failing at save. */}
+            {lockedShopId && shopsAlreadyOrdered.has(lockedShopId) && (
+              <p className="text-xs text-destructive">
+                This shop already has an order on {orderDate} — edit that order, or choose another
+                date.
               </p>
             )}
           </div>
@@ -227,7 +260,10 @@ export function NewOrderDialog({
         </div>
         <p className="num text-sm text-muted-foreground">Total quantity: {num(sumQty(qty))}</p>
         <DialogFooter>
-          <Button onClick={() => save.mutate()} disabled={!shopId || save.isPending}>
+          <Button
+            onClick={() => save.mutate()}
+            disabled={!shopId || shopsAlreadyOrdered.has(shopId) || save.isPending}
+          >
             {editing ? "Save changes" : "Save order"}
           </Button>
         </DialogFooter>

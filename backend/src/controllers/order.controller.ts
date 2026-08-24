@@ -117,9 +117,29 @@ type OrderBody = {
   order_lines: Array<{ product_id: string; qty: number }>;
 };
 
+/**
+ * A shop takes at most one order per calendar day — the New Order form hides
+ * shops that have already ordered on the chosen date, and this is the same
+ * rule enforced where it counts, so Shop Details (or a direct API call) can't
+ * create the duplicate the form is preventing.
+ */
+async function assertNoOrderOnDate(shopId: string, orderDate: string, exceptOrderId?: string) {
+  const filter: Record<string, unknown> = { shop_id: shopId, order_date: orderDate };
+  if (exceptOrderId) filter._id = { $ne: exceptOrderId };
+
+  const clash = await Order.findOne(filter, { order_no: 1 }).lean();
+  if (!clash) return;
+
+  const shop = await Shop.findById(shopId, { shop_name: 1 }).lean();
+  throw ApiError.conflict(
+    `${shop?.shop_name ?? "This shop"} already has an order on ${orderDate} (order #${clash.order_no}) — edit that order instead`,
+  );
+}
+
 export async function createOrder(req: Request, res: Response) {
   const body = req.body as OrderBody;
   if (!(await Shop.exists({ _id: body.shop_id }))) throw ApiError.badRequest("Shop not found");
+  await assertNoOrderOnDate(body.shop_id, body.order_date);
 
   const lines = body.order_lines.filter((l) => Number(l.qty) > 0);
   const order = await Order.create({
@@ -148,6 +168,9 @@ export async function updateOrder(req: Request, res: Response) {
   if (body.shop_id !== order.shop_id && !(await Shop.exists({ _id: body.shop_id }))) {
     throw ApiError.badRequest("Shop not found");
   }
+  // The order being edited is exempt from its own date — only a *different*
+  // order on the same shop and day is a clash.
+  await assertNoOrderOnDate(body.shop_id, body.order_date, order._id);
 
   const lines = body.order_lines.filter((l) => Number(l.qty) > 0);
   order.set({

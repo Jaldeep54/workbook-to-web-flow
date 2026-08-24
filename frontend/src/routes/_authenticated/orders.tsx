@@ -69,25 +69,32 @@ function OrdersPage() {
   const { data: shops = [] } = useQuery(shopsQuery);
   const { data: orders = [], isLoading } = useQuery(ordersQuery(month, shopFilter));
 
-  const orderDatesThisMonth = useMemo(
-    () => Array.from(new Set(orders.map((o) => o.order_date).filter((d): d is string => !!d))),
-    [orders],
-  );
-
   // Area + exact-date narrow the already month-scoped order list — never a lifetime total.
   const shopIdsInArea = useMemo(() => {
     if (areaFilter === "all") return null;
     return new Set(shops.filter((s) => s.area_id === areaFilter).map((s) => s.id));
   }, [shops, areaFilter]);
 
-  const filteredOrders = useMemo(
+  const ordersInArea = useMemo(
+    () => (shopIdsInArea ? orders.filter((o) => shopIdsInArea.has(o.shop_id)) : orders),
+    [orders, shopIdsInArea],
+  );
+
+  /**
+   * Days the calendar lights up: order dates in this month *for the selected
+   * area*. Picking an area therefore narrows the date picker down to the days
+   * that area actually ordered on. Deliberately not derived from
+   * `filteredOrders`, which the chosen date has already collapsed to one day.
+   */
+  const orderDatesThisMonth = useMemo(
     () =>
-      orders.filter(
-        (o) =>
-          (!shopIdsInArea || shopIdsInArea.has(o.shop_id)) &&
-          (!exactDate || o.order_date === exactDate),
-      ),
-    [orders, shopIdsInArea, exactDate],
+      Array.from(new Set(ordersInArea.map((o) => o.order_date).filter((d): d is string => !!d))),
+    [ordersInArea],
+  );
+
+  const filteredOrders = useMemo(
+    () => ordersInArea.filter((o) => !exactDate || o.order_date === exactDate),
+    [ordersInArea, exactDate],
   );
 
   const productTotals = useMemo(() => {
@@ -178,6 +185,7 @@ function OrdersPage() {
               onChange={(area) => {
                 setAreaFilter(area);
                 setShopFilter("all");
+                setExactDate(null);
               }}
             />
             <ShopFilter
@@ -237,7 +245,12 @@ function OrdersPage() {
         </div>
       </div>
 
-      <NewOrderDialog open={open} onOpenChange={setOpen} editing={editing} />
+      <NewOrderDialog
+        open={open}
+        onOpenChange={setOpen}
+        editing={editing}
+        defaultAreaId={areaFilter !== "all" ? areaFilter : null}
+      />
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>

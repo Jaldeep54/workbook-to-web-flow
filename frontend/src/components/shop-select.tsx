@@ -20,20 +20,32 @@ import { cn } from "@/lib/utils";
  * Type-to-search shop combobox (reuses the Command/Popover pattern from
  * ShopAreaSelect). Pass `areaId` to pre-filter the list to one Shop Area —
  * composes with the search box, which further narrows within that area.
+ * Pass `excludeShopIds` to drop shops that aren't valid to pick right now
+ * (New Order uses it for shops that already ordered on the chosen date).
  */
 export function SearchableShopSelect({
   value,
   onChange,
   areaId,
+  excludeShopIds,
   placeholder = "Select shop",
+  emptyMessage,
 }: {
   value: string;
   onChange: (shopId: string) => void;
   areaId?: string | null;
+  excludeShopIds?: ReadonlySet<string>;
   placeholder?: string;
+  /** Shown when every shop has been filtered out. */
+  emptyMessage?: string;
 }) {
   const { data: allShops = [] } = useQuery(shopsQuery);
-  const shops = areaId ? allShops.filter((s) => s.area_id === areaId) : allShops;
+  const inArea = areaId ? allShops.filter((s) => s.area_id === areaId) : allShops;
+  // The current value always stays selectable, so a shop can never vanish from
+  // under a selection that has already been made.
+  const shops = excludeShopIds
+    ? inArea.filter((s) => s.id === value || !excludeShopIds.has(s.id))
+    : inArea;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -72,7 +84,9 @@ export function SearchableShopSelect({
           />
           <CommandList>
             <CommandEmpty className="px-3 py-4 text-sm text-muted-foreground">
-              {areaId && shops.length === 0 ? "No shops in this area." : "No matching shop."}
+              {shops.length === 0
+                ? (emptyMessage ?? (areaId ? "No shops in this area." : "No shops available."))
+                : "No matching shop."}
             </CommandEmpty>
             <CommandGroup>
               {filtered.map((s) => (
@@ -87,7 +101,6 @@ export function SearchableShopSelect({
                 >
                   <Check className={cn("size-4", s.id === value ? "opacity-100" : "opacity-0")} />
                   {shopLabel(s.shop_name, s.label_name)}
-                  <span className="ml-auto text-xs text-muted-foreground">{s.code}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

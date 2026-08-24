@@ -18,6 +18,7 @@ import {
 describe("Orders, deliveries and payments", () => {
   let admin: Agent;
   let shopId: string;
+  let areaId: string;
   let products: Array<{ id: string; key: string; selling_price: number; production_cost: number; packaging_cost: number; label_cost_per_unit: number }>;
 
   beforeAll(async () => {
@@ -27,12 +28,12 @@ describe("Orders, deliveries and payments", () => {
     admin = await signInAsAdmin();
 
     products = (await admin.get("/products")).body.data;
-    const area = await admin.post("/shop-areas").send({ name: "Adajan" });
+    areaId = (await admin.post("/shop-areas").send({ name: "Adajan" })).body.data.id;
     const shop = await admin.post("/shops").send({
       code: "1",
       shop_name: "Order Test Shop",
       label_name: "OTS",
-      area_id: area.body.data.id,
+      area_id: areaId,
       product_ids: products.map((p) => p.id),
     });
     shopId = shop.body.data.id;
@@ -40,7 +41,9 @@ describe("Orders, deliveries and payments", () => {
 
   afterAll(stopTestServer);
 
-  async function createOrder(qty: number, date = "2026-08-05") {
+  // Every call passes an explicit, distinct date: a shop takes at most one
+  // order per calendar day, so reusing one would now be a 409.
+  async function createOrder(qty: number, date: string) {
     return admin.post("/orders").send({
       shop_id: shopId,
       order_date: date,
@@ -50,7 +53,7 @@ describe("Orders, deliveries and payments", () => {
   }
 
   it("creates an order, numbering it sequentially per shop", async () => {
-    const first = await createOrder(10);
+    const first = await createOrder(10, "2026-08-01");
     expect(first.status).toBe(201);
     expect(first.body.data.order_no).toBe(1);
     expect(first.body.data.total_qty).toBe(10);
@@ -58,12 +61,12 @@ describe("Orders, deliveries and payments", () => {
     expect(first.body.data.status).toBe("Pending");
     expect(first.body.data.shops.shop_name).toBe("Order Test Shop");
 
-    const second = await createOrder(5);
+    const second = await createOrder(5, "2026-08-02");
     expect(second.body.data.order_no).toBe(2);
   });
 
   it("computes delivery money figures with the workbook formulas", async () => {
-    const order = await createOrder(4);
+    const order = await createOrder(4, "2026-08-03");
     const product = products[0];
 
     const delivered = await admin
@@ -97,13 +100,13 @@ describe("Orders, deliveries and payments", () => {
   });
 
   it("re-syncs the delivery and payment when a delivered order is edited", async () => {
-    const order = await createOrder(2);
+    const order = await createOrder(2, "2026-08-04");
     await admin.patch(`/orders/${order.body.data.id}/status`).send({ status: "Delivered" });
 
     const updated = await admin.put(`/orders/${order.body.data.id}`).send({
       shop_id: shopId,
-      order_date: "2026-08-05",
-      delivery_date: "2026-08-05",
+      order_date: "2026-08-04",
+      delivery_date: "2026-08-04",
       order_lines: [{ product_id: products[0].id, qty: 20 }],
     });
     expect(updated.status).toBe(200);
@@ -118,7 +121,7 @@ describe("Orders, deliveries and payments", () => {
   });
 
   it("keeps a received payment's amount when the order is re-delivered", async () => {
-    const order = await createOrder(3);
+    const order = await createOrder(3, "2026-08-05");
     await admin.patch(`/orders/${order.body.data.id}/status`).send({ status: "Delivered" });
 
     const payments = await admin.get("/payments?month=2026-08-01");
@@ -135,6 +138,7 @@ describe("Orders, deliveries and payments", () => {
       delivery_date: "2026-08-05",
       order_lines: [{ product_id: products[0].id, qty: 30 }],
     });
+    // Re-saving an order on its own date is not a clash with itself.
 
     const after = await admin.get(`/payments/${payment.id}`);
     expect(after.body.data.status).toBe("Received");
@@ -143,7 +147,7 @@ describe("Orders, deliveries and payments", () => {
   });
 
   it("unwinds the delivery and payment when an order leaves Delivered", async () => {
-    const order = await createOrder(6);
+    const order = await createOrder(6, "2026-08-06");
     const orderId = order.body.data.id;
     await admin.patch(`/orders/${orderId}/status`).send({ status: "Delivered" });
 
@@ -161,7 +165,7 @@ describe("Orders, deliveries and payments", () => {
   });
 
   it("keeps a delivery whose payment was received, but moves its status in step", async () => {
-    const order = await createOrder(7);
+    const order = await createOrder(7, "2026-08-07");
     const orderId = order.body.data.id;
     await admin.patch(`/orders/${orderId}/status`).send({ status: "Delivered" });
 
@@ -223,7 +227,7 @@ describe("Orders, deliveries and payments", () => {
   });
 
   it("deletes an order together with its delivery and payment", async () => {
-    const order = await createOrder(9);
+    const order = await createOrder(9, "2026-08-08");
     const orderId = order.body.data.id;
     await admin.patch(`/orders/${orderId}/status`).send({ status: "Delivered" });
 
@@ -234,6 +238,58 @@ describe("Orders, deliveries and payments", () => {
         (d: { order_id: string }) => d.order_id === orderId,
       ),
     ).toBeUndefined();
+  });
+
+  it("allows only one order per shop per day", async () => {
+    const first = await createOrder(5, "2026-08-20");
+    expect(first.status).toBe(201);
+
+    const duplicate = await admin.post("/orders").send({
+      shop_id: shopId,
+      order_date: "2026-08-20",
+      delivery_date: "2026-08-21",
+      order_lines: [{ product_id: products[0].id, qty: 2 }],
+    });
+    expectError(duplicate, 409);
+    expect(duplicate.body.error.message).toContain("already has an order");
+
+    // The same day is fine for a different shop...
+    const other = await admin.post("/shops").send({
+      code: "2",
+      shop_name: "Second Shop",
+      area_id: areaId,
+      product_ids: [products[0].id],
+    });
+    const forOtherShop = await admin.post("/orders").send({
+      shop_id: other.body.data.id,
+      order_date: "2026-08-20",
+      delivery_date: "2026-08-20",
+      order_lines: [{ product_id: products[0].id, qty: 1 }],
+    });
+    expect(forOtherShop.status).toBe(201);
+
+    // ...and so is another day for this one.
+    expect((await createOrder(3, "2026-08-21")).status).toBe(201);
+
+    // Editing an order in place never clashes with itself, but moving it onto
+    // a day the shop already has an order on does.
+    const inPlace = await admin.put(`/orders/${first.body.data.id}`).send({
+      shop_id: shopId,
+      order_date: "2026-08-20",
+      delivery_date: "2026-08-22",
+      order_lines: [{ product_id: products[0].id, qty: 8 }],
+    });
+    expect(inPlace.status).toBe(200);
+
+    expectError(
+      await admin.put(`/orders/${first.body.data.id}`).send({
+        shop_id: shopId,
+        order_date: "2026-08-21",
+        delivery_date: "2026-08-21",
+        order_lines: [{ product_id: products[0].id, qty: 8 }],
+      }),
+      409,
+    );
   });
 
   it("validates order payloads", async () => {
@@ -274,7 +330,7 @@ describe("Orders, deliveries and payments", () => {
       400,
     );
     expectError(
-      await admin.patch(`/orders/${(await createOrder(1)).body.data.id}/status`).send({
+      await admin.patch(`/orders/${(await createOrder(1, "2026-08-09")).body.data.id}/status`).send({
         status: "Teleported",
       }),
       422,

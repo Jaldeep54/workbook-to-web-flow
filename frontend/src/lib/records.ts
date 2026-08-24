@@ -19,6 +19,18 @@ export const ordersQuery = (month: string, shopId: string | "all") =>
     queryFn: () => ordersApi.list({ month, shopId: shopId === "all" ? undefined : shopId }),
   });
 
+/**
+ * Every order placed on one date, whatever the month or shop. The New Order
+ * form uses this to hide shops that have already ordered that day.
+ */
+export const ordersOnDateQuery = (date: string | null) =>
+  queryOptions({
+    queryKey: ["orders", "on-date", date],
+    queryFn: () => ordersApi.list({ date: date! }),
+    enabled: !!date,
+    staleTime: 30 * 1000,
+  });
+
 /** Delivery sheet — every order scheduled for delivery on one date. */
 export const deliverySheetQuery = (date: string) =>
   queryOptions({

@@ -31,6 +31,8 @@ export const shopsApi = {
   remove: (id: string) => api.delete<{ message: string }>(`/shops/${id}`),
   nextCode: () => api.get<{ code: string }>("/shops/next-code"),
   productLinks: () => api.get<ShopProductLink[]>("/shops/products"),
+  /** People a shop can be "Handled by" — see `ShopHandler`. */
+  handlers: () => api.get<ShopHandler[]>("/shops/handlers"),
   uploadImage: (id: string, file: File) => {
     const form = new FormData();
     form.append("image", file);
@@ -41,6 +43,18 @@ export const shopsApi = {
   history: (id: string) => api.get<ShopHistory>(`/shops/${id}/history`),
   analysis: (id: string, months?: number) =>
     api.get<ShopAnalysis>(`/shops/${id}/analysis`, { months }),
+};
+
+/**
+ * A person a shop can be assigned to. These are the active user accounts of
+ * every role flagged "members handle shops" (Admin → Roles & permissions), so
+ * retiring a salesman means deactivating their account — they leave this list
+ * at once while the shops they handled keep showing their name.
+ */
+export type ShopHandler = {
+  id: string;
+  full_name: string;
+  role_name: string;
 };
 
 export const shopAreasApi = {
@@ -503,6 +517,8 @@ export type ManagedRole = {
   slug: string;
   description: string;
   isSystem: boolean;
+  /** Members of this role fill a shop's "Handled by" picker. */
+  handlesShops: boolean;
   permissionIds: string[];
   permissionCount: number;
   userCount: number;
@@ -561,10 +577,21 @@ export const usersApi = {
 export const rolesApi = {
   list: () => api.get<ManagedRole[]>("/roles"),
   get: (id: string) => api.get<ManagedRole & { permissions: PermissionRow[] }>(`/roles/${id}`),
-  create: (payload: { name: string; description?: string; permissions?: string[] }) =>
-    api.post<ManagedRole>("/roles", payload),
-  update: (id: string, payload: { name?: string; description?: string; permissions?: string[] }) =>
-    api.patch<ManagedRole>(`/roles/${id}`, payload),
+  create: (payload: {
+    name: string;
+    description?: string;
+    permissions?: string[];
+    handlesShops?: boolean;
+  }) => api.post<ManagedRole>("/roles", payload),
+  update: (
+    id: string,
+    payload: {
+      name?: string;
+      description?: string;
+      permissions?: string[];
+      handlesShops?: boolean;
+    },
+  ) => api.patch<ManagedRole>(`/roles/${id}`, payload),
   setPermissions: (id: string, permissions: string[]) =>
     api.put<ManagedRole>(`/roles/${id}/permissions`, { permissions }),
   remove: (id: string) => api.delete<{ message: string }>(`/roles/${id}`),

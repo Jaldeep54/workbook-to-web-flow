@@ -40,9 +40,13 @@ describe("Shop images in GridFS", () => {
     await clearDomainCollections();
     admin = await signInAsAdmin();
     const productIds = (await admin.get("/products")).body.data.map((p: { id: string }) => p.id);
-    const created = await admin
-      .post("/shops")
-      .send({ code: "501", shop_name: "GridFS Grocers", product_ids: productIds.slice(0, 1) });
+    const areaId = (await admin.post("/shop-areas").send({ name: "Adajan" })).body.data.id;
+    const created = await admin.post("/shops").send({
+      code: "501",
+      shop_name: "GridFS Grocers",
+      area_id: areaId,
+      product_ids: productIds.slice(0, 1),
+    });
     if (created.status !== 201) throw new Error(`Shop setup failed: ${JSON.stringify(created.body)}`);
     shopId = created.body.data.id;
   });

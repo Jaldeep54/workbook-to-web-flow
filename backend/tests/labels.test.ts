@@ -33,9 +33,11 @@ describe("Labels, stock and reorder suggestions", () => {
     const labelProducts = (await admin.get("/label-products")).body.data;
     dw200Label = labelProducts.find((lp: { key: string }) => lp.key === "dw200");
 
+    const areaId = (await admin.post("/shop-areas").send({ name: "Katargam" })).body.data.id;
     const shop = await admin.post("/shops").send({
       code: "L1",
       shop_name: "Label Test Shop",
+      area_id: areaId,
       product_ids: [dw200.id],
     });
     shopId = shop.body.data.id;
@@ -144,9 +146,11 @@ describe("Labels, stock and reorder suggestions", () => {
   });
 
   it("places several suggested orders at once, reporting per shop", async () => {
+    const secondArea = (await admin.post("/shop-areas").send({ name: "Piplod" })).body.data.id;
     const second = await admin.post("/shops").send({
       code: "L2",
       shop_name: "Second Label Shop",
+      area_id: secondArea,
       product_ids: [dw200.id],
     });
 

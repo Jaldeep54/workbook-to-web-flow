@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Save, Shield, Trash2 } from "lucide-react";
+import { Plus, Save, Shield, Store, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -101,6 +102,26 @@ function RolesView() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  /**
+   * Which roles supply a shop's "Handled by" list. Kept as a per-role switch
+   * rather than a hardcoded "salesman" slug so sales roles can be renamed,
+   * split or added without a code change.
+   */
+  const setHandlesShops = useMutation({
+    mutationFn: ({ role, handlesShops }: { role: ManagedRole; handlesShops: boolean }) =>
+      rolesApi.update(role.id, { handlesShops }),
+    onSuccess: (role) => {
+      toast.success(
+        role.handlesShops
+          ? `${role.name} users can now be assigned to shops`
+          : `${role.name} users no longer appear in "Handled by"`,
+      );
+      void qc.invalidateQueries({ queryKey: ["admin_roles"] });
+      void qc.invalidateQueries({ queryKey: ["shop_handlers"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const createRole = useMutation({
     mutationFn: () =>
       rolesApi.create({ name: newRole.name.trim(), description: newRole.description.trim() }),
@@ -171,11 +192,18 @@ function RolesView() {
             >
               <span className="flex w-full items-center justify-between gap-2">
                 <span className="font-medium">{role.name}</span>
-                {role.isSystem && (
-                  <Badge variant="secondary" className="gap-1">
-                    <Shield className="size-3" /> System
-                  </Badge>
-                )}
+                <span className="flex shrink-0 items-center gap-1">
+                  {role.handlesShops && (
+                    <Badge variant="outline" className="gap-1" title="Handles shops">
+                      <Store className="size-3" />
+                    </Badge>
+                  )}
+                  {role.isSystem && (
+                    <Badge variant="secondary" className="gap-1">
+                      <Shield className="size-3" /> System
+                    </Badge>
+                  )}
+                </span>
               </span>
               <span className="text-xs text-muted-foreground">
                 {role.permissionCount} permissions · {role.userCount} user
@@ -197,6 +225,23 @@ function RolesView() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <Can resource={RESOURCES.roles} action="update">
+                <label className="mr-2 flex cursor-pointer items-center gap-2 text-xs">
+                  <Switch
+                    checked={selectedRole?.handlesShops ?? false}
+                    disabled={!selectedRole || setHandlesShops.isPending}
+                    onCheckedChange={(handlesShops) =>
+                      selectedRole && setHandlesShops.mutate({ role: selectedRole, handlesShops })
+                    }
+                  />
+                  <span>
+                    Members handle shops
+                    <span className="ml-1 text-muted-foreground">
+                      (fills a shop&apos;s “Handled by”)
+                    </span>
+                  </span>
+                </label>
+              </Can>
               <Can resource={RESOURCES.roles} action="delete">
                 <Button
                   variant="outline"

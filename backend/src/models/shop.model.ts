@@ -51,7 +51,15 @@ export interface IShop {
   latitude: number | null;
   longitude: number | null;
   mobile: string | null;
+  /**
+   * Display name of the person who handles this shop. Denormalized from
+   * `handled_by_user_id` on every write so historical rows keep reading
+   * correctly after that user is deactivated or renamed — and so shops
+   * imported from the workbook, which have a name but no account, still work.
+   */
   handled_by: string | null;
+  /** The user account behind `handled_by`, when the handler has one. */
+  handled_by_user_id: string | null;
   joined_on: string | null;
   is_active: boolean;
   created_at?: Date;
@@ -74,6 +82,7 @@ const shopSchema = new Schema<IShop>(
     longitude: { type: Number, default: null, min: -180, max: 180 },
     mobile: { type: String, default: null, trim: true },
     handled_by: { type: String, default: null, trim: true },
+    handled_by_user_id: { type: String, ref: "User", default: null },
     joined_on: { type: String, default: null, match: ISO_DATE_MATCH },
     is_active: { type: Boolean, default: true },
   },
@@ -84,6 +93,7 @@ shopSchema.index({ is_active: 1, shop_name: 1 });
 shopSchema.index({ area_id: 1 });
 shopSchema.index({ shop_name: 1 });
 shopSchema.index({ latitude: 1, longitude: 1 });
+shopSchema.index({ handled_by_user_id: 1 });
 
 export const Shop = model<IShop>("Shop", shopSchema, "shops");
 

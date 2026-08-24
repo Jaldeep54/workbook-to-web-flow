@@ -13,12 +13,15 @@ export const shopBodySchema = z.object({
   label_name: z.string().trim().max(200).nullish(),
   bill_name: z.string().trim().max(200).nullish(),
   design_type: z.coerce.number().int().min(1).max(99).default(1),
-  area_id: idString.nullish(),
+  /** Required: every area filter in the app depends on it. */
+  area_id: idString.refine((v) => v.length > 0, "Shop area is required"),
   address: z.string().trim().max(500).nullish(),
   latitude: z.coerce.number().min(-90).max(90).nullish(),
   longitude: z.coerce.number().min(-180).max(180).nullish(),
   mobile: z.string().trim().max(30).nullish(),
   handled_by: z.string().trim().max(120).nullish(),
+  /** When set, the API overwrites `handled_by` with that user's name. */
+  handled_by_user_id: idString.nullish(),
   joined_on: isoDate.nullish(),
   is_active: z.boolean().default(true),
   /** Products the shop works with — at least one, as the UI requires. */

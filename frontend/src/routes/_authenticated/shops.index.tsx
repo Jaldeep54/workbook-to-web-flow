@@ -55,6 +55,7 @@ import {
   fetchNextShopCode,
   productsQuery,
   shopAreasQuery,
+  shopHandlersQuery,
   shopProductsQuery,
   shopsQuery,
 } from "@/lib/queries";
@@ -63,6 +64,7 @@ import { downloadCsv } from "@/lib/export";
 import { dateLabel } from "@/lib/format";
 import { designTypeColor, googleMapsDirectionsUrl } from "@/lib/domain";
 import type { Shop } from "@/lib/domain";
+import type { ShopHandler } from "@/services/klinzo.service";
 
 export const Route = createFileRoute("/_authenticated/shops/")({
   component: () => (
@@ -71,6 +73,10 @@ export const Route = createFileRoute("/_authenticated/shops/")({
     </RequirePermission>
   ),
 });
+
+/** Sentinel values for the two non-user options in the "Handled by" picker. */
+const NO_HANDLER = "__none__";
+const LEGACY_HANDLER = "__legacy__";
 
 const emptyShop = {
   code: "",
@@ -85,70 +91,78 @@ const emptyShop = {
   longitude: null as number | null,
   mobile: "",
   handled_by: "",
+  handled_by_user_id: null as string | null,
   joined_on: "",
   is_active: true,
 };
 
-/** Base "Handled by" options — grows over time with any distinct value already on file. */
-const DEFAULT_HANDLERS = ["Bhavin", "Amisha"];
-
+/**
+ * "Handled by" is a user account, not free text: the options are the active
+ * users of every role flagged "members handle shops" (Admin → Roles &
+ * permissions). Retiring a salesman is therefore just deactivating their
+ * account — they leave this list immediately, while the shops they used to
+ * handle keep showing their name.
+ *
+ * Two kinds of shop have a handler who isn't in that list: ones imported from
+ * the workbook (a name, no account) and ones whose handler has since been
+ * deactivated. Both keep their stored name as a selectable option, so opening
+ * such a shop for an unrelated edit never silently blanks the field.
+ */
 function HandledBySelect({
-  value,
+  userId,
+  name,
   onChange,
-  shops,
+  handlers,
+  isLoading,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  shops: Shop[];
+  userId: string | null;
+  name: string;
+  onChange: (next: { handled_by_user_id: string | null; handled_by: string }) => void;
+  handlers: ShopHandler[];
+  isLoading: boolean;
 }) {
-  const [addingNew, setAddingNew] = useState(false);
-  const [newName, setNewName] = useState("");
+  const isCurrent = !!userId && handlers.some((h) => h.id === userId);
+  // A stored name with no assignable account behind it — legacy or retired.
+  const retiredName = !isLoading && !isCurrent && name ? name : null;
+  const value = isCurrent ? userId! : retiredName ? LEGACY_HANDLER : "";
 
-  const options = useMemo(() => {
-    const existing = shops.map((s) => s.handled_by).filter((v): v is string => !!v);
-    const all = new Set([...DEFAULT_HANDLERS, ...existing]);
-    if (value) all.add(value);
-    return Array.from(all).sort((a, b) => a.localeCompare(b));
-  }, [shops, value]);
-
-  const confirmNewName = () => {
-    if (newName.trim()) onChange(newName.trim());
-    setAddingNew(false);
-    setNewName("");
-  };
-
-  if (addingNew) {
+  if (!isLoading && handlers.length === 0 && !retiredName) {
     return (
-      <div className="flex gap-2">
-        <Input
-          autoFocus
-          placeholder="Person's name"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && confirmNewName()}
-        />
-        <Button type="button" variant="outline" onClick={confirmNewName}>
-          Add
-        </Button>
-      </div>
+      <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+        No one can be assigned yet. In Admin → Roles &amp; permissions, switch on “Members handle
+        shops” for a role (the seeded <span className="font-medium">Salesman</span> role has it
+        already), then add users to it.
+      </p>
     );
   }
 
   return (
     <Select
       value={value || undefined}
-      onValueChange={(v) => (v === "__add__" ? setAddingNew(true) : onChange(v))}
+      onValueChange={(v) => {
+        if (v === LEGACY_HANDLER) return;
+        if (v === NO_HANDLER) {
+          onChange({ handled_by_user_id: null, handled_by: "" });
+          return;
+        }
+        const picked = handlers.find((h) => h.id === v);
+        onChange({ handled_by_user_id: v, handled_by: picked?.full_name ?? "" });
+      }}
     >
       <SelectTrigger>
-        <SelectValue placeholder="Select person" />
+        <SelectValue placeholder={isLoading ? "Loading people…" : "Select person"} />
       </SelectTrigger>
       <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o} value={o}>
-            {o}
+        <SelectItem value={NO_HANDLER}>Not assigned</SelectItem>
+        {retiredName && (
+          <SelectItem value={LEGACY_HANDLER}>{retiredName} — no active account</SelectItem>
+        )}
+        {handlers.map((h) => (
+          <SelectItem key={h.id} value={h.id}>
+            {h.full_name}
+            <span className="ml-2 text-xs text-muted-foreground">{h.role_name}</span>
           </SelectItem>
         ))}
-        <SelectItem value="__add__">+ Add Person…</SelectItem>
       </SelectContent>
     </Select>
   );
@@ -160,6 +174,7 @@ function ShopsPage() {
   const { data: products = [] } = useQuery(productsQuery);
   const { data: shopProducts = [] } = useQuery(shopProductsQuery);
   const { data: areas = [] } = useQuery(shopAreasQuery);
+  const { data: handlers = [], isLoading: handlersLoading } = useQuery(shopHandlersQuery);
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("all");
   const [open, setOpen] = useState(false);
@@ -206,17 +221,29 @@ function ShopsPage() {
       );
   }, [shops, search, areaFilter, areaName]);
 
+  /**
+   * The mandatory fields, and why: an area drives every area filter in the
+   * app, the name identifies the shop everywhere, and the product list decides
+   * what can be ordered for it. Everything else can be filled in later.
+   */
+  const missingRequired = useMemo(() => {
+    const missing: string[] = [];
+    if (!form.area_id) missing.push("Shop area");
+    if (!form.shop_name.trim()) missing.push("Shop name");
+    if (selectedProducts.length === 0) missing.push("Products this shop works with");
+    return missing;
+  }, [form.area_id, form.shop_name, selectedProducts]);
+
   const save = useMutation({
     mutationFn: async () => {
-      if (!form.shop_name.trim()) throw new Error("Shop name is required");
-      if (selectedProducts.length === 0)
-        throw new Error("Select at least one product for this shop");
+      if (missingRequired.length > 0) throw new Error(`Required: ${missingRequired.join(", ")}`);
 
       const payload = {
         ...form,
         code: form.code.trim(),
         shop_name: form.shop_name.trim(),
         joined_on: form.joined_on || null,
+        handled_by: form.handled_by.trim() || null,
         design_type: Number(form.design_type) || 1,
         // The shop's product list is saved with the shop in one call; the API
         // works out what to add and remove.
@@ -306,6 +333,7 @@ function ShopsPage() {
       longitude: shop.longitude,
       mobile: shop.mobile ?? "",
       handled_by: shop.handled_by ?? "",
+      handled_by_user_id: shop.handled_by_user_id ?? null,
       joined_on: shop.joined_on ?? "",
       is_active: shop.is_active,
     });
@@ -359,7 +387,9 @@ function ShopsPage() {
           <div className="flex-1 space-y-5 overflow-y-auto px-6 pb-2">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <Label className="mb-1.5 block text-xs">Shop area</Label>
+                <Label className="mb-1.5 block text-xs">
+                  Shop area <RequiredMark />
+                </Label>
                 <ShopAreaSelect
                   value={form.area_id}
                   onChange={(areaId) => setForm({ ...form, area_id: areaId })}
@@ -389,6 +419,7 @@ function ShopsPage() {
               <div className="sm:col-span-2">
                 <Field
                   label="Shop name"
+                  required
                   value={form.shop_name}
                   onChange={(v) => setForm({ ...form, shop_name: v })}
                 />
@@ -417,9 +448,11 @@ function ShopsPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs">Handled by</Label>
                 <HandledBySelect
-                  value={form.handled_by}
-                  onChange={(v) => setForm({ ...form, handled_by: v })}
-                  shops={shops}
+                  userId={form.handled_by_user_id}
+                  name={form.handled_by}
+                  onChange={(next) => setForm({ ...form, ...next })}
+                  handlers={handlers}
+                  isLoading={handlersLoading}
                 />
               </div>
               <Field
@@ -437,7 +470,9 @@ function ShopsPage() {
                 <Label htmlFor="active">Active</Label>
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <Label className="text-xs">Products this shop works with</Label>
+                <Label className="text-xs">
+                  Products this shop works with <RequiredMark />
+                </Label>
                 <ProductMultiSelect
                   products={products}
                   selected={selectedProducts}
@@ -468,12 +503,15 @@ function ShopsPage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="px-6 pb-6">
+          <DialogFooter className="items-center px-6 pb-6 sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              {missingRequired.length > 0
+                ? `Still needed: ${missingRequired.join(", ")}`
+                : "Fields marked * are required."}
+            </p>
             <Button
               onClick={() => save.mutate()}
-              disabled={
-                !form.code || !form.shop_name || selectedProducts.length === 0 || save.isPending
-              }
+              disabled={!form.code || missingRequired.length > 0 || save.isPending}
             >
               Save shop
             </Button>
@@ -731,21 +769,38 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
+function RequiredMark() {
+  return (
+    <span className="text-destructive" aria-label="required">
+      *
+    </span>
+  );
+}
+
 function Field({
   label,
   value,
   onChange,
   type = "text",
+  required = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  required?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
+      <Label className="text-xs">
+        {label} {required && <RequiredMark />}
+      </Label>
+      <Input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-required={required}
+      />
     </div>
   );
 }

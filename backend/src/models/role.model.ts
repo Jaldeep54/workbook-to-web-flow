@@ -27,6 +27,13 @@ export interface IRole {
   permissions: string[];
   /** System roles (Admin) can't be renamed away or deleted. */
   isSystem: boolean;
+  /**
+   * Marks the role as one whose members handle shops in the field — the
+   * "Handled by" picker on a shop lists the active users of every role with
+   * this flag. Kept as a role flag rather than a hardcoded slug so an
+   * administrator can rename or add sales roles without a code change.
+   */
+  handlesShops: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -39,6 +46,7 @@ const roleSchema = new Schema<IRole>(
     description: { type: String, trim: true, default: "" },
     permissions: { type: [String], ref: "Permission", default: [] },
     isSystem: { type: Boolean, default: false },
+    handlesShops: { type: Boolean, default: false },
   },
   platformSchemaOptions(),
 );

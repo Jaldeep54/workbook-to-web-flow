@@ -61,7 +61,10 @@ export type Shop = {
   latitude: number | null;
   longitude: number | null;
   mobile: string | null;
+  /** Display name of the person handling this shop — kept even after their account goes. */
   handled_by: string | null;
+  /** The user account behind `handled_by`, when the handler has one. */
+  handled_by_user_id: string | null;
   joined_on: string | null;
   is_active: boolean;
 };

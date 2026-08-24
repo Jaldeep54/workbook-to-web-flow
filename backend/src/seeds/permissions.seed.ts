@@ -80,6 +80,7 @@ export async function seedRoles(permissionIdByName: Map<string, string>): Promis
       slug: ADMIN_ROLE_SLUG,
       description: "Full access to every module and to user, role and permission management",
       isSystem: true,
+      handlesShops: false,
       permissions: Array.from(permissionIdByName.values()),
     },
     {
@@ -105,6 +106,29 @@ export async function seedRoles(permissionIdByName: Map<string, string>): Promis
         "products:view",
         "label_products:view",
       ]),
+      handlesShops: false,
+    },
+    {
+      name: "Salesman",
+      slug: "salesman",
+      description:
+        "Field sales: the people a shop can be 'Handled by'. Works with shops and orders, no finance or administration",
+      isSystem: false,
+      // Members of any role flagged `handlesShops` populate a shop's
+      // "Handled by" picker — deactivate the user to retire them from it.
+      handlesShops: true,
+      permissions: ids([
+        "dashboard:view",
+        "shops:view",
+        "shops:create",
+        "shops:update",
+        "shop_areas:view",
+        "orders:view",
+        "orders:create",
+        "orders:update",
+        "deliveries:view",
+        "products:view",
+      ]),
     },
     {
       name: "Accounts",
@@ -129,6 +153,7 @@ export async function seedRoles(permissionIdByName: Map<string, string>): Promis
         "bills:view",
         "bills:create",
       ]),
+      handlesShops: false,
     },
   ];
 

@@ -16,6 +16,7 @@ describe("Shops, areas and files", () => {
   let server: Awaited<ReturnType<typeof startTestServer>>;
   let admin: Agent;
   let productIds: string[];
+  let areaId: string;
 
   beforeAll(async () => {
     server = await startTestServer();
@@ -23,6 +24,7 @@ describe("Shops, areas and files", () => {
     await clearDomainCollections();
     admin = await signInAsAdmin();
     productIds = (await admin.get("/products")).body.data.map((p: { id: string }) => p.id);
+    areaId = (await admin.post("/shop-areas").send({ name: "Varachha" })).body.data.id;
   });
 
   afterAll(stopTestServer);
@@ -37,6 +39,7 @@ describe("Shops, areas and files", () => {
       label_name: "Krishna",
       bill_name: "Krishna Provision Store",
       design_type: 2,
+      area_id: areaId,
       mobile: "9876543210",
       address: "Ring Road, Surat",
       latitude: 21.1702,
@@ -62,6 +65,7 @@ describe("Shops, areas and files", () => {
       await admin.post("/shops").send({
         code: "1",
         shop_name: "Duplicate Code",
+        area_id: areaId,
         product_ids: productIds.slice(0, 1),
       }),
       409,
@@ -70,6 +74,7 @@ describe("Shops, areas and files", () => {
       await admin.post("/shops").send({
         code: "99",
         shop_name: "Bad Coordinates",
+        area_id: areaId,
         latitude: 200,
         longitude: 0,
         product_ids: productIds.slice(0, 1),
@@ -77,7 +82,16 @@ describe("Shops, areas and files", () => {
       422,
     );
     expectError(
-      await admin.post("/shops").send({ code: "98", shop_name: "No Products", product_ids: [] }),
+      await admin
+        .post("/shops")
+        .send({ code: "98", shop_name: "No Products", area_id: areaId, product_ids: [] }),
+      422,
+    );
+    // Shop area is mandatory — every area filter in the app depends on it.
+    expectError(
+      await admin
+        .post("/shops")
+        .send({ code: "97", shop_name: "No Area", product_ids: productIds.slice(0, 1) }),
       422,
     );
   });
@@ -96,6 +110,56 @@ describe("Shops, areas and files", () => {
     const links = await admin.get("/shops/products");
     expect(links.body.data.filter((l: { shop_id: string }) => l.shop_id === shop.id)).toHaveLength(
       productIds.length,
+    );
+  });
+
+  it("offers users of shop-handling roles as a shop's handler", async () => {
+    // "Handled by" is driven by a role flag rather than a hardcoded slug, so
+    // an administrator can add or rename sales roles without a code change.
+    const role = await admin
+      .post("/roles")
+      .send({ name: "Field Sales", handlesShops: true, permissions: [] });
+    expect(role.status).toBe(201);
+    expect(role.body.data.handlesShops).toBe(true);
+
+    const salesman = await admin.post("/users").send({
+      email: "field.sales@example.com",
+      password: "Salesman@123",
+      fullName: "Ravi Desai",
+      role: role.body.data.id,
+    });
+    expect(salesman.status).toBe(201);
+
+    const handlers = await admin.get("/shops/handlers");
+    expect(handlers.status).toBe(200);
+    expect(handlers.body.data).toContainEqual({
+      id: salesman.body.data.id,
+      full_name: "Ravi Desai",
+      role_name: "Field Sales",
+    });
+    // Users of roles without the flag are not handlers.
+    expect(
+      handlers.body.data.some((h: { role_name: string }) => h.role_name === "Admin"),
+    ).toBe(false);
+
+    // Picking a handler copies their name onto the shop, so the shop still
+    // reads correctly once that account is gone.
+    const shop = (await admin.get("/shops?search=Krishna")).body.data[0];
+    const assigned = await admin
+      .patch(`/shops/${shop.id}`)
+      .send({ handled_by_user_id: salesman.body.data.id });
+    expect(assigned.body.data.handled_by).toBe("Ravi Desai");
+    expect(assigned.body.data.handled_by_user_id).toBe(salesman.body.data.id);
+
+    // Retiring the salesman drops them from the picker but leaves the shop's
+    // record intact — this is how a salesman is removed from "Handled by".
+    expect((await admin.patch(`/users/${salesman.body.data.id}`).send({ isActive: false })).status).toBe(200);
+    expect((await admin.get("/shops/handlers")).body.data).toHaveLength(0);
+    expect((await admin.get(`/shops/${shop.id}`)).body.data.handled_by).toBe("Ravi Desai");
+
+    expectError(
+      await admin.patch(`/shops/${shop.id}`).send({ handled_by_user_id: "no-such-user" }),
+      400,
     );
   });
 

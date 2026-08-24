@@ -46,6 +46,13 @@ export const shopAreasQuery = queryOptions({
 /** Finds an existing area by name (case/whitespace-insensitive) or creates it. */
 export const upsertShopArea = (name: string) => shopAreasApi.upsert(name);
 
+/** The people a shop can be "Handled by" — active users of shop-handling roles. */
+export const shopHandlersQuery = queryOptions({
+  queryKey: ["shop_handlers"],
+  staleTime: 60 * 1000,
+  queryFn: () => shopsApi.handlers(),
+});
+
 /** Which of the products each shop works with. */
 export const shopProductsQuery = queryOptions({
   queryKey: ["shop_products"],
@@ -160,6 +167,7 @@ export type {
   ShopAnalysis,
   ShopAnalysisMixRow,
   ShopAnalysisSalesRow,
+  ShopHandler,
   ShopLabelSummary,
   ShopProductLink as ShopProduct,
   SkuOpportunityRow,

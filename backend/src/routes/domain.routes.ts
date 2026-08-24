@@ -64,6 +64,8 @@ shopRouter.get(
 );
 shopRouter.get("/next-code", authorize(RESOURCES.shops, "create"), asyncHandler(shops.getNextShopCode));
 shopRouter.get("/products", authorize(RESOURCES.shops, "view"), asyncHandler(shops.listShopProducts));
+/** People a shop can be "Handled by" — see the controller for who qualifies. */
+shopRouter.get("/handlers", authorize(RESOURCES.shops, "view"), asyncHandler(shops.listShopHandlers));
 shopRouter.post(
   "/",
   authorize(RESOURCES.shops, "create"),

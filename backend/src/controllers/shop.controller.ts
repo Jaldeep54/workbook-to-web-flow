@@ -1,7 +1,9 @@
 import type { Request, Response } from "express";
 
 import { Delivery, LabelOrder, Order, Payment } from "../models/order.model.js";
+import { Role } from "../models/role.model.js";
 import { Shop, ShopArea, ShopProduct, type IShop } from "../models/shop.model.js";
+import { User } from "../models/user.model.js";
 import { nextShopCode } from "../services/catalogue.service.js";
 import { deleteShopImage, saveShopImage, signedImagePath } from "../services/file.service.js";
 import { shopAnalysis, SHOP_ANALYSIS_MONTHS } from "../services/shop-analysis.service.js";
@@ -63,6 +65,25 @@ export async function listShopProducts(_req: Request, res: Response) {
   return ok(res, links.map((l) => ({ shop_id: l.shop_id, product_id: l.product_id })));
 }
 
+/**
+ * A shop's handler is a user account (see `listShopHandlers`), but the name is
+ * stored on the shop as well so history survives that account being
+ * deactivated, renamed or deleted. Resolving here keeps the two in step.
+ */
+async function resolveHandler(body: Record<string, unknown>) {
+  if (!("handled_by_user_id" in body)) return;
+
+  const userId = body.handled_by_user_id as string | null | undefined;
+  if (!userId) {
+    body.handled_by_user_id = null;
+    return;
+  }
+
+  const user = await User.findById(userId, { fullName: 1 }).lean();
+  if (!user) throw ApiError.badRequest("The selected person no longer has an account");
+  body.handled_by = user.fullName;
+}
+
 async function syncShopProducts(shopId: string, productIds: string[]) {
   const existing = await ShopProduct.find({ shop_id: shopId }, { product_id: 1 }).lean();
   const current = new Set(existing.map((l) => l.product_id));
@@ -91,6 +112,7 @@ export async function createShop(req: Request, res: Response) {
   if (body.area_id && !(await ShopArea.exists({ _id: body.area_id }))) {
     throw ApiError.badRequest("The selected shop area does not exist");
   }
+  await resolveHandler(body);
 
   const shop = await Shop.create(body);
   await syncShopProducts(shop._id, productIds);
@@ -114,6 +136,7 @@ export async function updateShop(req: Request, res: Response) {
   if (body.area_id && !(await ShopArea.exists({ _id: body.area_id }))) {
     throw ApiError.badRequest("The selected shop area does not exist");
   }
+  await resolveHandler(body);
 
   shop.set(body);
   await shop.save();
@@ -155,6 +178,37 @@ export async function deleteShop(req: Request, res: Response) {
   await deleteShopImage(shop.image_path);
   await shop.deleteOne();
   return ok(res, { message: "Shop deleted" });
+}
+
+/**
+ * The people a shop can be "Handled by": active users of every role flagged
+ * `handlesShops` (Admin → Roles). Retiring a salesman is therefore just
+ * deactivating their account — they drop out of this list immediately while
+ * the shops they used to handle keep showing their name.
+ *
+ * Guarded by `shops:view`, not `users:view`, so anyone who can edit a shop can
+ * fill this field without being handed the user directory.
+ */
+export async function listShopHandlers(_req: Request, res: Response) {
+  const roles = await Role.find({ handlesShops: true }, { _id: 1, name: 1 }).lean();
+  if (roles.length === 0) return ok(res, []);
+
+  const roleName = new Map(roles.map((r) => [r._id, r.name]));
+  const users = await User.find(
+    { role: { $in: Array.from(roleName.keys()) }, isActive: true },
+    { fullName: 1, role: 1 },
+  )
+    .sort({ fullName: 1 })
+    .lean();
+
+  return ok(
+    res,
+    users.map((u) => ({
+      id: u._id,
+      full_name: u.fullName,
+      role_name: roleName.get(u.role) ?? "",
+    })),
+  );
 }
 
 export async function getNextShopCode(_req: Request, res: Response) {

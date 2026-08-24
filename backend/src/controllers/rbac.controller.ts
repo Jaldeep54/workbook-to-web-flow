@@ -113,6 +113,7 @@ async function presentRole(roleId: string) {
     slug: role.slug,
     description: role.description,
     isSystem: role.isSystem,
+    handlesShops: role.handlesShops ?? false,
     userCount,
     permissions: permissions.map((p) => ({
       id: p._id,
@@ -143,6 +144,7 @@ export async function listRoles(_req: Request, res: Response) {
       slug: role.slug,
       description: role.description,
       isSystem: role.isSystem,
+      handlesShops: role.handlesShops ?? false,
       permissionIds: role.permissions ?? [],
       permissionCount: (role.permissions ?? []).length,
       userCount: countByRole.get(role._id) ?? 0,
@@ -156,7 +158,12 @@ export async function getRole(req: Request, res: Response) {
 }
 
 export async function createRole(req: Request, res: Response) {
-  const body = req.body as { name: string; description: string; permissions: string[] };
+  const body = req.body as {
+    name: string;
+    description: string;
+    permissions: string[];
+    handlesShops?: boolean;
+  };
   const slug = slugifyRoleName(body.name);
   if (!slug) throw ApiError.badRequest("Role name must contain letters or numbers");
   if (await Role.exists({ slug })) throw ApiError.conflict(`A role named "${body.name}" already exists`);
@@ -168,6 +175,7 @@ export async function createRole(req: Request, res: Response) {
     slug,
     description: body.description ?? "",
     permissions: body.permissions ?? [],
+    handlesShops: body.handlesShops ?? false,
   });
 
   return created(res, await presentRole(role._id));
@@ -177,7 +185,12 @@ export async function updateRole(req: Request, res: Response) {
   const role = await Role.findById(req.params.id);
   if (!role) throw ApiError.notFound("Role not found");
 
-  const body = req.body as Partial<{ name: string; description: string; permissions: string[] }>;
+  const body = req.body as Partial<{
+    name: string;
+    description: string;
+    permissions: string[];
+    handlesShops: boolean;
+  }>;
 
   if (body.name && body.name !== role.name) {
     if (role.isSystem) throw ApiError.badRequest("Built-in roles cannot be renamed");
@@ -190,6 +203,7 @@ export async function updateRole(req: Request, res: Response) {
   }
 
   if (body.description !== undefined) role.description = body.description;
+  if (body.handlesShops !== undefined) role.handlesShops = body.handlesShops;
 
   if (body.permissions) {
     await assertPermissionIdsExist(body.permissions);

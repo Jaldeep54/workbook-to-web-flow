@@ -1,0 +1,4 @@
+# Vercel CLI project link and the env file it pulls
+.vercel
+.env*
+!.env.example

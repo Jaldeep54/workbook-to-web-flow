@@ -78,3 +78,40 @@ export function getCurrentPosition(): Promise<{ latitude: number; longitude: num
     );
   });
 }
+
+/**
+ * Google's address components, most specific first, that correspond to what
+ * Klinzo calls a Shop Area — a neighbourhood inside a city (Mota Varachha,
+ * Katargam…). `locality` and the district below it are the fallbacks for a
+ * pin that sits outside any named neighbourhood.
+ */
+const AREA_COMPONENT_TYPES = [
+  "sublocality_level_1",
+  "sublocality",
+  "neighborhood",
+  "locality",
+  "administrative_area_level_3",
+];
+
+/**
+ * Reverse-geocodes a pin into the name of the area it sits in, plus the full
+ * address. Unlike `reverseGeocode` this throws on failure: the caller asked
+ * for the area explicitly, so a silent null would look like a broken button.
+ */
+export async function reverseGeocodeArea(
+  latitude: number,
+  longitude: number,
+): Promise<{ areaName: string | null; address: string | null }> {
+  const { Geocoder } = await loadGeocodingLibrary();
+  const { results } = await new Geocoder().geocode({
+    location: { lat: latitude, lng: longitude },
+  });
+  const address = results[0]?.formatted_address ?? null;
+  for (const type of AREA_COMPONENT_TYPES) {
+    for (const result of results) {
+      const match = result.address_components.find((c) => c.types.includes(type));
+      if (match) return { areaName: match.long_name, address };
+    }
+  }
+  return { areaName: null, address };
+}

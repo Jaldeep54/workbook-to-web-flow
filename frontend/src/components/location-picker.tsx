@@ -32,11 +32,14 @@ export function LocationPicker({
   latitude,
   longitude,
   onLocationChange,
+  required = false,
 }: {
   address: string;
   latitude: number | null;
   longitude: number | null;
   onLocationChange: (loc: { latitude: number; longitude: number; address?: string }) => void;
+  /** Marks the field with an asterisk — the caller still does the validating. */
+  required?: boolean;
 }) {
   const mapsUnavailable = useMapsUnavailableReason();
   const [query, setQuery] = useState(address);
@@ -126,7 +129,14 @@ export function LocationPicker({
 
   return (
     <div className="space-y-3">
-      <Label className="text-xs">Location</Label>
+      <Label className="text-xs">
+        Location{" "}
+        {required && (
+          <span className="text-destructive" aria-label="required">
+            *
+          </span>
+        )}
+      </Label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
           <Input

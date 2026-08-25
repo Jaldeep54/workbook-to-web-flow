@@ -1,7 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { Download, MapPin, Plus, Search, Store } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Download,
+  MapPin,
+  Plus,
+  Search,
+  Store,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
@@ -63,6 +76,7 @@ import { isHeicPath } from "@/lib/shop-image";
 import { downloadCsv } from "@/lib/export";
 import { dateLabel } from "@/lib/format";
 import { designTypeColor, googleMapsDirectionsUrl } from "@/lib/domain";
+import { cn } from "@/lib/utils";
 import type { Shop } from "@/lib/domain";
 import type { ShopHandler } from "@/services/klinzo.service";
 
@@ -77,6 +91,15 @@ export const Route = createFileRoute("/_authenticated/shops/")({
 /** Sentinel values for the two non-user options in the "Handled by" picker. */
 const NO_HANDLER = "__none__";
 const LEGACY_HANDLER = "__legacy__";
+
+/** Sentinel for "shops with nobody assigned" in the Handled by column filter. */
+const UNASSIGNED = "__unassigned__";
+
+const PAGE_SIZES = [10, 25, 50, 100];
+
+/** The shop columns that can be sorted on — `design_type` is the only numeric one. */
+type SortKey = "shop_name" | "handled_by" | "joined_on" | "mobile" | "design_type";
+type SortState = { key: SortKey; dir: "asc" | "desc" };
 
 const emptyShop = {
   code: "",
@@ -177,6 +200,11 @@ function ShopsPage() {
   const { data: handlers = [], isLoading: handlersLoading } = useQuery(shopHandlersQuery);
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("all");
+  const [handlerFilter, setHandlerFilter] = useState("all");
+  const [designFilter, setDesignFilter] = useState("all");
+  const [sort, setSort] = useState<SortState>({ key: "shop_name", dir: "asc" });
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Shop | null>(null);
   const [form, setForm] = useState({ ...emptyShop });
@@ -185,6 +213,9 @@ function ShopsPage() {
   const [removeImage, setRemoveImage] = useState(false);
   const [detailsShop, setDetailsShop] = useState<Shop | null>(null);
   const [deletingShop, setDeletingShop] = useState<Shop | null>(null);
+  // Deleting a shop is confirmed twice: the first dialog explains what
+  // "delete" actually does, the second asks outright.
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
 
   const areaName = useMemo(() => {
     const map = new Map(areas.map((a) => [a.id, a.name]));
@@ -200,10 +231,32 @@ function ShopsPage() {
     return map;
   }, [shopProducts]);
 
+  /** Every name that appears in the Handled by column, for that column's filter. */
+  const handlerNames = useMemo(
+    () =>
+      Array.from(new Set(shops.map((s) => s.handled_by).filter((n): n is string => !!n))).sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [shops],
+  );
+
+  const designTypes = useMemo(
+    () => Array.from(new Set(shops.map((s) => s.design_type))).sort((a, b) => a - b),
+    [shops],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return shops
       .filter((s) => areaFilter === "all" || s.area_id === areaFilter)
+      .filter((s) =>
+        handlerFilter === "all"
+          ? true
+          : handlerFilter === UNASSIGNED
+            ? !s.handled_by
+            : s.handled_by === handlerFilter,
+      )
+      .filter((s) => designFilter === "all" || String(s.design_type) === designFilter)
       .filter(
         (s) =>
           !q ||
@@ -219,20 +272,62 @@ function ShopsPage() {
             .filter(Boolean)
             .some((v) => String(v).toLowerCase().includes(q)),
       );
-  }, [shops, search, areaFilter, areaName]);
+  }, [shops, search, areaFilter, handlerFilter, designFilter, areaName]);
+
+  const sorted = useMemo(() => {
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const key = sort.key;
+    return [...filtered].sort((a, b) => {
+      if (key === "design_type") return (a.design_type - b.design_type) * dir;
+      const av = a[key] ?? "";
+      const bv = b[key] ?? "";
+      // Blanks sit at the bottom whichever way the column is sorted — a shop
+      // with no mobile number is never the "first" result.
+      if (!av !== !bv) return av ? -1 : 1;
+      return av.localeCompare(bv, "en-IN", { numeric: true, sensitivity: "base" }) * dir;
+    });
+  }, [filtered, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const firstRow = (currentPage - 1) * pageSize;
+  const pageRows = sorted.slice(firstRow, firstRow + pageSize);
+
+  // Narrowing the list can leave the current page past the end of it.
+  useEffect(() => {
+    setPage(1);
+  }, [search, areaFilter, handlerFilter, designFilter, pageSize]);
+
+  const toggleSort = (key: SortKey) =>
+    setSort((s) =>
+      s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
+    );
 
   /**
-   * The mandatory fields, and why: an area drives every area filter in the
-   * app, the name identifies the shop everywhere, and the product list decides
-   * what can be ordered for it. Everything else can be filled in later.
+   * A shop is only saved once it is described in full: every field on the form
+   * is mandatory, so no shop reaches the table with a blank column. The photo
+   * is the sole exception — it is uploaded separately and is often taken
+   * later, so requiring it would block adding a shop at all.
+   *
+   * The same rule applies when editing, which is how shops imported from the
+   * workbook get their gaps filled in.
    */
   const missingRequired = useMemo(() => {
     const missing: string[] = [];
     if (!form.area_id) missing.push("Shop area");
+    if (!form.folder_name.trim()) missing.push("Folder name");
     if (!form.shop_name.trim()) missing.push("Shop name");
+    if (!form.label_name.trim()) missing.push("Label name");
+    if (!form.bill_name.trim()) missing.push("Bill name");
+    if (!(Number(form.design_type) > 0)) missing.push("Design type");
+    if (!form.mobile.trim()) missing.push("Mobile");
+    if (!form.handled_by.trim()) missing.push("Handled by");
+    if (!form.joined_on) missing.push("Joined on");
     if (selectedProducts.length === 0) missing.push("Products this shop works with");
+    if (!form.address.trim()) missing.push("Address");
+    if (form.latitude == null || form.longitude == null) missing.push("Location");
     return missing;
-  }, [form.area_id, form.shop_name, selectedProducts]);
+  }, [form, selectedProducts]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -282,12 +377,17 @@ function ShopsPage() {
     mutationFn: (shop: Shop) => shopsApi.deactivate(shop.id),
     onSuccess: () => {
       toast.success("Shop deleted");
-      setDeletingShop(null);
+      closeDelete();
       setDetailsShop(null);
       void qc.invalidateQueries({ queryKey: ["shops"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const closeDelete = () => {
+    setDeletingShop(null);
+    setDeleteConfirmed(false);
+  };
 
   const closeForm = () => {
     setOpen(false);
@@ -298,11 +398,15 @@ function ShopsPage() {
     setRemoveImage(false);
   };
 
-  /** New shops get the next sequential code automatically — no longer shown in the UI. */
+  /**
+   * New shops get the next sequential code automatically — no longer shown in
+   * the UI — and start in whichever area the table is currently filtered to,
+   * since shops are normally added a neighbourhood at a time.
+   */
   const openCreate = async () => {
     setEditing(null);
     setSelectedProducts([]);
-    setForm({ ...emptyShop });
+    setForm({ ...emptyShop, area_id: areaFilter === "all" ? null : areaFilter });
     setImageFile(null);
     setRemoveImage(false);
     setOpen(true);
@@ -352,7 +456,7 @@ function ShopsPage() {
               onClick={() =>
                 downloadCsv(
                   "klinzo-shops",
-                  filtered.map((s) => ({
+                  sorted.map((s) => ({
                     Code: s.code,
                     Shop: s.shop_name,
                     "Label name": s.label_name ?? "",
@@ -413,6 +517,7 @@ function ShopsPage() {
               </div>
               <Field
                 label="Folder name"
+                required
                 value={form.folder_name}
                 onChange={(v) => setForm({ ...form, folder_name: v })}
               />
@@ -426,27 +531,33 @@ function ShopsPage() {
               </div>
               <Field
                 label="Label name"
+                required
                 value={form.label_name}
                 onChange={(v) => setForm({ ...form, label_name: v })}
               />
               <Field
                 label="Bill name"
+                required
                 value={form.bill_name}
                 onChange={(v) => setForm({ ...form, bill_name: v })}
               />
               <Field
                 label="Design type"
                 type="number"
+                required
                 value={String(form.design_type)}
                 onChange={(v) => setForm({ ...form, design_type: Number(v) || 1 })}
               />
               <Field
                 label="Mobile"
+                required
                 value={form.mobile}
                 onChange={(v) => setForm({ ...form, mobile: v })}
               />
               <div className="space-y-1.5">
-                <Label className="text-xs">Handled by</Label>
+                <Label className="text-xs">
+                  Handled by <RequiredMark />
+                </Label>
                 <HandledBySelect
                   userId={form.handled_by_user_id}
                   name={form.handled_by}
@@ -458,6 +569,7 @@ function ShopsPage() {
               <Field
                 label="Joined on"
                 type="date"
+                required
                 value={form.joined_on}
                 onChange={(v) => setForm({ ...form, joined_on: v })}
               />
@@ -481,13 +593,17 @@ function ShopsPage() {
               </div>
               <div className="space-y-4 border-t border-border pt-4 sm:col-span-2">
                 <div>
-                  <Label className="mb-1.5 block text-xs">Address</Label>
+                  <Label className="mb-1.5 block text-xs">
+                    Address <RequiredMark />
+                  </Label>
                   <Input
                     value={form.address}
                     onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    aria-required
                   />
                 </div>
                 <LocationPicker
+                  required
                   address={form.address}
                   latitude={form.latitude}
                   longitude={form.longitude}
@@ -507,7 +623,7 @@ function ShopsPage() {
             <p className="text-xs text-muted-foreground">
               {missingRequired.length > 0
                 ? `Still needed: ${missingRequired.join(", ")}`
-                : "Fields marked * are required."}
+                : "Every field is required — the shop photo is optional."}
             </p>
             <Button
               onClick={() => save.mutate()}
@@ -535,21 +651,51 @@ function ShopsPage() {
         onDelete={(shop) => setDeletingShop(shop)}
       />
 
-      <AlertDialog open={!!deletingShop} onOpenChange={(o) => !o && setDeletingShop(null)}>
+      <AlertDialog open={!!deletingShop} onOpenChange={(o) => !o && closeDelete()}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deletingShop?.shop_name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This deactivates the shop and hides it from active lists. Its historical orders,
-              deliveries, payments and label orders are kept — nothing is permanently deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deletingShop && archive.mutate(deletingShop)}>
-              Delete shop
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {deleteConfirmed ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure you want to delete this shop?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <span className="font-medium text-foreground">{deletingShop?.shop_name}</span>{" "}
+                  will stop appearing in orders, deliveries and every active list. This is the last
+                  step — confirm to delete it.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={archive.isPending}
+                  onClick={() => deletingShop && archive.mutate(deletingShop)}
+                >
+                  {archive.isPending ? "Deleting…" : "Yes, delete shop"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {deletingShop?.shop_name}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This deactivates the shop and hides it from active lists. Its historical orders,
+                  deliveries, payments and label orders are kept — nothing is permanently deleted.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                {/* Step one of two — advance the dialog instead of closing it. */}
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setDeleteConfirmed(true);
+                  }}
+                >
+                  Continue
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
 
@@ -563,31 +709,85 @@ function ShopsPage() {
             className="min-w-40 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
           />
           <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
+          <Select value={handlerFilter} onValueChange={setHandlerFilter}>
+            <SelectTrigger className="w-[190px] bg-card">
+              <SelectValue placeholder="All handlers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All handlers</SelectItem>
+              <SelectItem value={UNASSIGNED}>Not assigned</SelectItem>
+              {handlerNames.map((n) => (
+                <SelectItem key={n} value={n}>
+                  {n}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={designFilter} onValueChange={setDesignFilter}>
+            <SelectTrigger className="w-[150px] bg-card">
+              <SelectValue placeholder="All designs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All designs</SelectItem>
+              {designTypes.map((d) => (
+                <SelectItem key={d} value={String(d)}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className="size-2.5 rounded-full"
+                      style={{ backgroundColor: designTypeColor(d) }}
+                    />
+                    Design {d}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-14 text-right">S.No.</TableHead>
-                <TableHead>Shop</TableHead>
-                <TableHead>Shop Area</TableHead>
+                <SortableHead label="Shop" sortKey="shop_name" sort={sort} onSort={toggleSort} />
                 <TableHead>Location</TableHead>
-                <TableHead>Handled by</TableHead>
-                <TableHead>Design</TableHead>
+                <SortableHead
+                  label="Handled by"
+                  sortKey="handled_by"
+                  sort={sort}
+                  onSort={toggleSort}
+                />
+                <SortableHead
+                  label="Joined date"
+                  sortKey="joined_on"
+                  sort={sort}
+                  onSort={toggleSort}
+                />
+                <SortableHead
+                  label="Mobile number"
+                  sortKey="mobile"
+                  sort={sort}
+                  onSort={toggleSort}
+                />
+                <SortableHead
+                  label="Design"
+                  sortKey="design_type"
+                  sort={sort}
+                  onSort={toggleSort}
+                />
                 <TableHead className="text-right">View Details</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                     Loading shops…
                   </TableCell>
                 </TableRow>
               )}
-              {!isLoading && filtered.length === 0 && (
+              {!isLoading && sorted.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-14 text-center">
+                  <TableCell colSpan={8} className="py-14 text-center">
                     <Store className="mx-auto size-8 text-muted-foreground/60" />
                     <p className="mt-3 text-sm text-muted-foreground">
                       No shops yet — add one, or import your workbook.
@@ -595,9 +795,11 @@ function ShopsPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {filtered.map((shop, i) => (
+              {pageRows.map((shop, i) => (
                 <TableRow key={shop.id}>
-                  <TableCell className="num text-right text-muted-foreground">{i + 1}</TableCell>
+                  <TableCell className="num text-right text-muted-foreground">
+                    {firstRow + i + 1}
+                  </TableCell>
                   <TableCell>
                     <Link
                       to="/shops/$shopId"
@@ -609,9 +811,6 @@ function ShopsPage() {
                     {shop.label_name && (
                       <p className="text-xs text-muted-foreground">{shop.label_name}</p>
                     )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {areaName(shop.area_id)}
                   </TableCell>
                   <TableCell>
                     {shop.latitude != null && shop.longitude != null ? (
@@ -629,6 +828,10 @@ function ShopsPage() {
                     )}
                   </TableCell>
                   <TableCell>{shop.handled_by ?? "—"}</TableCell>
+                  <TableCell className="num whitespace-nowrap text-sm text-muted-foreground">
+                    {dateLabel(shop.joined_on)}
+                  </TableCell>
+                  <TableCell className="num whitespace-nowrap">{shop.mobile || "—"}</TableCell>
                   <TableCell>
                     <span className="inline-flex items-center gap-1.5 num">
                       <span
@@ -648,8 +851,139 @@ function ShopsPage() {
             </TableBody>
           </Table>
         </div>
+        <TablePagination
+          total={sorted.length}
+          firstRow={firstRow}
+          shown={pageRows.length}
+          page={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
     </>
+  );
+}
+
+/** A column header that sorts the table by its column, ascending then descending. */
+function SortableHead({
+  label,
+  sortKey,
+  sort,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  sort: SortState;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = sort.key === sortKey;
+  const Icon = active ? (sort.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <TableHead aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className="inline-flex items-center gap-1 whitespace-nowrap hover:text-foreground"
+      >
+        {label}
+        <Icon className={cn("size-3.5", active ? "opacity-100" : "opacity-40")} />
+      </button>
+    </TableHead>
+  );
+}
+
+/** Shops-per-page picker and page stepper, shown under the shop table. */
+function TablePagination({
+  total,
+  firstRow,
+  shown,
+  page,
+  totalPages,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  total: number;
+  firstRow: number;
+  shown: number;
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-3">
+      <p className="text-xs text-muted-foreground">
+        {total === 0
+          ? "No shops to show"
+          : `Showing ${firstRow + 1}–${firstRow + shown} of ${total} shops`}
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Shops per page</span>
+          <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+            <SelectTrigger className="h-8 w-[76px] bg-card">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZES.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            aria-label="First page"
+            disabled={page <= 1}
+            onClick={() => onPageChange(1)}
+          >
+            <ChevronsLeft className="size-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            aria-label="Previous page"
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <span className="num px-2 text-xs text-muted-foreground">
+            Page {page} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            aria-label="Next page"
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(page + 1)}
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            aria-label="Last page"
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(totalPages)}
+          >
+            <ChevronsRight className="size-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -28,15 +28,27 @@ import {
 import { PageHeader } from "@/components/app-shell";
 import { RequirePermission } from "@/components/require-permission";
 import { RESOURCES } from "@/hooks/usePermissions";
+import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { MonthPicker } from "@/components/month-picker";
 import { ShopAreaFilter } from "@/components/filter-bar";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { currentMonth, monthLabel } from "@/lib/domain";
+import {
+  currentFinancialYear,
+  currentMonth,
+  defaultMonthForFinancialYear,
+  financialYearLabel,
+  monthLabel,
+} from "@/lib/domain";
 import { inr, inrCompact, num } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
-import { shopAreasQuery, shopsQuery, summaryByAreaQuery } from "@/lib/queries";
+import {
+  availableMonthsQuery,
+  shopAreasQuery,
+  shopsQuery,
+  summaryByAreaQuery,
+} from "@/lib/queries";
 
 export const Route = createFileRoute("/_authenticated/")({
   component: () => (
@@ -85,11 +97,13 @@ const CHART_COLORS = [
 ];
 
 function Overview() {
+  const [fy, setFy] = useState(currentFinancialYear());
   const [month, setMonth] = useState(currentMonth());
   const [areaFilter, setAreaFilter] = useState("all");
   const summary = useQuery(summaryByAreaQuery(month, areaFilter));
   const shops = useQuery(shopsQuery);
   const areas = useQuery(shopAreasQuery);
+  const availableMonths = useQuery(availableMonthsQuery);
 
   const s = summary.data;
   const profit = (s?.totalSales ?? 0) - (s?.totalFixedCost ?? 0) - (s?.variableCost ?? 0);
@@ -112,6 +126,7 @@ function Overview() {
     if (!s) return;
     downloadCsv(`klinzo-overview-${month}`, [
       {
+        "Financial year": financialYearLabel(fy),
         Month: monthLabel(month),
         Area: areaName,
         Orders: s.orderCount,
@@ -132,10 +147,20 @@ function Overview() {
     <>
       <PageHeader
         title="Overview"
-        description={`Business performance for ${monthLabel(month)} — ${areaName}`}
+        description={`Business performance for ${monthLabel(month)} (${financialYearLabel(fy)}) — ${areaName}`}
         actions={
           <>
-            <MonthPicker value={month} onChange={setMonth} />
+            {/* Financial year first, then the month it scopes — the same
+                order every other dated page uses. */}
+            <FinancialYearPicker
+              value={fy}
+              onChange={(newFy) => {
+                setFy(newFy);
+                setMonth(defaultMonthForFinancialYear(newFy));
+              }}
+              dates={availableMonths.data ?? []}
+            />
+            <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
             <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
             <Button variant="outline" onClick={exportSummary} disabled={!s}>
               <Download className="size-4" /> Export

@@ -22,7 +22,7 @@ export function ShopFilter({
   const shops = areaId ? allShops.filter((s) => s.area_id === areaId) : allShops;
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-[210px] bg-card">
+      <SelectTrigger className="w-[210px] max-w-full bg-card">
         <SelectValue placeholder="All shops" />
       </SelectTrigger>
       <SelectContent>
@@ -86,7 +86,7 @@ export function ShopAreaFilter({
   const { data: areas = [] } = useQuery(shopAreasQuery);
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-[180px] bg-card">
+      <SelectTrigger className="w-[180px] max-w-full bg-card">
         <SelectValue placeholder="All areas" />
       </SelectTrigger>
       <SelectContent>

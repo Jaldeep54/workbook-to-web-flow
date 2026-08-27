@@ -72,6 +72,8 @@ export type Shop = {
 export type ShopArea = {
   id: string;
   name: string;
+  /** How many shops sit in this area — drives the delete guard in Shop areas. */
+  shop_count: number;
 };
 
 /** Design types map to a fixed marker color everywhere a shop appears on a map. */
@@ -222,11 +224,21 @@ export function monthsInFinancialYear(fy: string): string[] {
  * Builds the FY dropdown list from data actually present (plus the current
  * FY, always, so there's something sensible to pick on a brand-new dataset)
  * — same pattern MonthPicker uses for its month list.
+ *
+ * `dates` are dates; `extraKeys` are financial years that are already FY keys
+ * (a selected value, say). The two are not interchangeable: an FY key like
+ * "2025" read as a date is 1 Jan 2025, which belongs to FY 2024-25.
  */
-export function financialYearsFromDates(dates: Array<string | null | undefined>): string[] {
+export function financialYearsFromDates(
+  dates: Array<string | null | undefined>,
+  extraKeys: Array<string | null | undefined> = [],
+): string[] {
   const set = new Set<string>([currentFinancialYear()]);
   for (const d of dates) {
     if (d) set.add(financialYearKeyForDate(d));
+  }
+  for (const fy of extraKeys) {
+    if (fy) set.add(fy);
   }
   return Array.from(set).sort((a, b) => Number(b) - Number(a));
 }

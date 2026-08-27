@@ -43,9 +43,6 @@ export const shopAreasQuery = queryOptions({
   queryFn: () => shopAreasApi.list(),
 });
 
-/** Finds an existing area by name (case/whitespace-insensitive) or creates it. */
-export const upsertShopArea = (name: string) => shopAreasApi.upsert(name);
-
 /** The people a shop can be "Handled by" — active users of shop-handling roles. */
 export const shopHandlersQuery = queryOptions({
   queryKey: ["shop_handlers"],

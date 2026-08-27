@@ -38,14 +38,7 @@ import { Can, RESOURCES } from "@/hooks/usePermissions";
 import { RequirePermission } from "@/components/require-permission";
 import { costsApi } from "@/services/klinzo.service";
 import { costsQuery } from "@/lib/records";
-import {
-  COST_TYPES,
-  currentFinancialYear,
-  currentMonth,
-  defaultMonthForFinancialYear,
-  monthKey,
-  monthLabel,
-} from "@/lib/domain";
+import { COST_TYPES, currentFinancialYear, currentMonth, monthKey, monthLabel } from "@/lib/domain";
 import { dateLabel, inr, todayISO } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 
@@ -111,9 +104,9 @@ function CostsPage() {
           <>
             <FinancialYearPicker
               value={fy}
-              onChange={(newFy) => {
+              onChange={(newFy, suggestedMonth) => {
                 setFy(newFy);
-                setMonth(defaultMonthForFinancialYear(newFy));
+                setMonth(suggestedMonth);
               }}
               dates={costs.map((c) => c.cost_date)}
             />

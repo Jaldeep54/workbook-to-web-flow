@@ -62,7 +62,16 @@ export const shopAreasApi = {
   /** Find-or-create by name; the backend dedupes case-insensitively. */
   upsert: (name: string) => api.post<ShopArea>("/shop-areas", { name }),
   update: (id: string, name: string) => api.patch<ShopArea>(`/shop-areas/${id}`, { name }),
-  remove: (id: string) => api.delete<{ message: string }>(`/shop-areas/${id}`),
+  /**
+   * An area still holding shops is refused unless the caller says what should
+   * happen to them: `reassignTo` moves them to another area, `force` leaves
+   * them with no area at all.
+   */
+  remove: (id: string, options?: { reassignTo?: string; force?: boolean }) =>
+    api.delete<{ message: string; shops_affected: number }>(`/shop-areas/${id}`, {
+      ...(options?.reassignTo ? { reassignTo: options.reassignTo } : {}),
+      ...(options?.force ? { force: "true" } : {}),
+    }),
 };
 
 /* --------------------------------------------------------------- catalogue */

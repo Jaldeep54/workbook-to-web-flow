@@ -50,7 +50,6 @@ import { labelOrdersQuery, type LabelOrderRecord } from "@/lib/records";
 import {
   currentFinancialYear,
   currentMonth,
-  defaultMonthForFinancialYear,
   labelsFromSheets,
   monthKey,
   monthLabel,
@@ -378,9 +377,9 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
       <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
         <FinancialYearPicker
           value={fy}
-          onChange={(newFy) => {
+          onChange={(newFy, suggestedMonth) => {
             setFy(newFy);
-            setMonth(defaultMonthForFinancialYear(newFy));
+            setMonth(suggestedMonth);
           }}
           dates={monthOrders.map((o) => o.order_date)}
         />

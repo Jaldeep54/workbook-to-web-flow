@@ -12,6 +12,7 @@ import {
   Download,
   MapPin,
   Plus,
+  MapPinned,
   Search,
   Store,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import { LocationPicker } from "@/components/location-picker";
 import { ProductMultiSelect, ProductChips } from "@/components/product-multi-select";
 import { ShopAreaFilter } from "@/components/filter-bar";
 import { ShopAreaSelect } from "@/components/shop-area-select";
+import { ShopAreasDialog } from "@/components/shop-areas-dialog";
 import { ShopImageField } from "@/components/shop-image-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -216,6 +218,7 @@ function ShopsPage() {
   // Deleting a shop is confirmed twice: the first dialog explains what
   // "delete" actually does, the second asks outright.
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const [areasOpen, setAreasOpen] = useState(false);
 
   const areaName = useMemo(() => {
     const map = new Map(areas.map((a) => [a.id, a.name]));
@@ -231,15 +234,6 @@ function ShopsPage() {
     return map;
   }, [shopProducts]);
 
-  /** Every name that appears in the Handled by column, for that column's filter. */
-  const handlerNames = useMemo(
-    () =>
-      Array.from(new Set(shops.map((s) => s.handled_by).filter((n): n is string => !!n))).sort(
-        (a, b) => a.localeCompare(b),
-      ),
-    [shops],
-  );
-
   const designTypes = useMemo(
     () => Array.from(new Set(shops.map((s) => s.design_type))).sort((a, b) => a - b),
     [shops],
@@ -253,8 +247,8 @@ function ShopsPage() {
         handlerFilter === "all"
           ? true
           : handlerFilter === UNASSIGNED
-            ? !s.handled_by
-            : s.handled_by === handlerFilter,
+            ? !s.handled_by_user_id
+            : s.handled_by_user_id === handlerFilter,
       )
       .filter((s) => designFilter === "all" || String(s.design_type) === designFilter)
       .filter(
@@ -474,6 +468,11 @@ function ShopsPage() {
             >
               <Download className="size-4" /> Export
             </Button>
+            <Can resource={RESOURCES.shopAreas} action="view">
+              <Button variant="outline" onClick={() => setAreasOpen(true)}>
+                <MapPinned className="size-4" /> Shop areas
+              </Button>
+            </Can>
             <Can resource={RESOURCES.shops} action="create">
               <Button onClick={() => void openCreate()}>
                 <Plus className="size-4" /> New shop
@@ -482,6 +481,8 @@ function ShopsPage() {
           </>
         }
       />
+
+      <ShopAreasDialog open={areasOpen} onOpenChange={setAreasOpen} />
 
       <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : closeForm())}>
         <DialogContent className="flex max-h-[85vh] max-w-lg flex-col overflow-hidden p-0">
@@ -709,22 +710,26 @@ function ShopsPage() {
             className="min-w-40 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
           />
           <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
+          {/* Only people who can currently be assigned are offered — the
+              same active, shop-handling users the form's picker lists. A shop
+              still shows the stored name of a handler who has since left, but
+              filtering by them is not something you can do any more. */}
           <Select value={handlerFilter} onValueChange={setHandlerFilter}>
-            <SelectTrigger className="w-[190px] bg-card">
+            <SelectTrigger className="w-[190px] max-w-full bg-card">
               <SelectValue placeholder="All handlers" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All handlers</SelectItem>
               <SelectItem value={UNASSIGNED}>Not assigned</SelectItem>
-              {handlerNames.map((n) => (
-                <SelectItem key={n} value={n}>
-                  {n}
+              {handlers.map((h) => (
+                <SelectItem key={h.id} value={h.id}>
+                  {h.full_name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={designFilter} onValueChange={setDesignFilter}>
-            <SelectTrigger className="w-[150px] bg-card">
+            <SelectTrigger className="w-[150px] max-w-full bg-card">
               <SelectValue placeholder="All designs" />
             </SelectTrigger>
             <SelectContent>

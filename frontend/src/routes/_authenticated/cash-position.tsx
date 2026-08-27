@@ -49,7 +49,6 @@ import {
   CASH_POSITION_PEOPLE,
   currentFinancialYear,
   currentMonth,
-  defaultMonthForFinancialYear,
   monthKey,
   monthLabel,
   type CashPositionPerson,
@@ -195,9 +194,9 @@ function InvestmentsSection({
         </div>
         <FinancialYearPicker
           value={fy}
-          onChange={(newFy) => {
+          onChange={(newFy, suggestedMonth) => {
             setFy(newFy);
-            setMonth(defaultMonthForFinancialYear(newFy));
+            setMonth(suggestedMonth);
           }}
           dates={investments.map((row) => row.investment_date)}
         />
@@ -366,9 +365,9 @@ function PayoutsSection({ total }: { total: number }) {
         </div>
         <FinancialYearPicker
           value={fy}
-          onChange={(newFy) => {
+          onChange={(newFy, suggestedMonth) => {
             setFy(newFy);
-            setMonth(defaultMonthForFinancialYear(newFy));
+            setMonth(suggestedMonth);
           }}
           dates={payouts.map((row) => row.payout_date)}
         />

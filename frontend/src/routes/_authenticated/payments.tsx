@@ -31,13 +31,7 @@ import { RESOURCES, usePermissions } from "@/hooks/usePermissions";
 import { paymentsApi } from "@/services/klinzo.service";
 import { shopsQuery } from "@/lib/queries";
 import { paymentsQuery, type PaymentRecord } from "@/lib/records";
-import {
-  PAYMENT_STATUSES,
-  currentFinancialYear,
-  currentMonth,
-  defaultMonthForFinancialYear,
-  monthLabel,
-} from "@/lib/domain";
+import { PAYMENT_STATUSES, currentFinancialYear, currentMonth, monthLabel } from "@/lib/domain";
 import { dateLabel, inr } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 
@@ -97,9 +91,9 @@ function PaymentsPage() {
           <>
             <FinancialYearPicker
               value={fy}
-              onChange={(newFy) => {
+              onChange={(newFy, suggestedMonth) => {
                 setFy(newFy);
-                setMonth(defaultMonthForFinancialYear(newFy));
+                setMonth(suggestedMonth);
               }}
               dates={allPayments.map((p) => p.payment_date)}
             />

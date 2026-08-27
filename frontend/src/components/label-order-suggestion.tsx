@@ -485,7 +485,7 @@ export function LabelOrderSuggestionTab({
             setAddShopValue("");
           }}
         >
-          <SelectTrigger className="w-[240px] bg-card">
+          <SelectTrigger className="w-[240px] max-w-full bg-card">
             <SelectValue placeholder="+ Add a shop manually" />
           </SelectTrigger>
           <SelectContent>

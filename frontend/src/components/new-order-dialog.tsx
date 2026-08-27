@@ -187,8 +187,8 @@ export function NewOrderDialog({
                 {selectedShop ? shopLabel(selectedShop.shop_name, selectedShop.label_name) : "—"}
               </p>
             ) : (
-              <div className="flex gap-2">
-                <div className="w-40 shrink-0">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="sm:shrink-0">
                   <ShopAreaFilter
                     value={areaFilter}
                     onChange={(area) => {
@@ -197,7 +197,7 @@ export function NewOrderDialog({
                     }}
                   />
                 </div>
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <SearchableShopSelect
                     value={shopId}
                     onChange={setShopId}

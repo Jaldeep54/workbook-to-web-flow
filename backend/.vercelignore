@@ -1,3 +1,8 @@
 tests
 uploads
 *.md
+
+# Local environment files: production config comes from the Vercel project,
+# never from a developer machine.
+.env
+.env.*

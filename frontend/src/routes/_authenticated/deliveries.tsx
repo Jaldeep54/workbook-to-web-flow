@@ -47,7 +47,6 @@ import {
   computeDeliveryTotals,
   currentFinancialYear,
   currentMonth,
-  defaultMonthForFinancialYear,
   monthKey,
   monthLabel,
   type QtyMap,
@@ -146,9 +145,9 @@ function DeliveriesPage() {
           <>
             <FinancialYearPicker
               value={fy}
-              onChange={(newFy) => {
+              onChange={(newFy, suggestedMonth) => {
                 setFy(newFy);
-                setMonth(defaultMonthForFinancialYear(newFy));
+                setMonth(suggestedMonth);
               }}
               dates={allDeliveries.map((d) => d.delivery_date)}
             />

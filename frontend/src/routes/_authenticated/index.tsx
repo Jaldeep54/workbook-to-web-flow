@@ -34,21 +34,10 @@ import { ShopAreaFilter } from "@/components/filter-bar";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  currentFinancialYear,
-  currentMonth,
-  defaultMonthForFinancialYear,
-  financialYearLabel,
-  monthLabel,
-} from "@/lib/domain";
+import { currentFinancialYear, currentMonth, financialYearLabel, monthLabel } from "@/lib/domain";
 import { inr, inrCompact, num } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
-import {
-  availableMonthsQuery,
-  shopAreasQuery,
-  shopsQuery,
-  summaryByAreaQuery,
-} from "@/lib/queries";
+import { shopAreasQuery, shopsQuery, summaryByAreaQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/_authenticated/")({
   component: () => (
@@ -103,7 +92,6 @@ function Overview() {
   const summary = useQuery(summaryByAreaQuery(month, areaFilter));
   const shops = useQuery(shopsQuery);
   const areas = useQuery(shopAreasQuery);
-  const availableMonths = useQuery(availableMonthsQuery);
 
   const s = summary.data;
   const profit = (s?.totalSales ?? 0) - (s?.totalFixedCost ?? 0) - (s?.variableCost ?? 0);
@@ -154,11 +142,10 @@ function Overview() {
                 order every other dated page uses. */}
             <FinancialYearPicker
               value={fy}
-              onChange={(newFy) => {
+              onChange={(newFy, suggestedMonth) => {
                 setFy(newFy);
-                setMonth(defaultMonthForFinancialYear(newFy));
+                setMonth(suggestedMonth);
               }}
-              dates={availableMonths.data ?? []}
             />
             <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
             <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />

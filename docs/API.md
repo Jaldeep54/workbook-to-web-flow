@@ -159,6 +159,12 @@ still assigned to users can't be deleted (409).
   otherwise use `/deactivate`, which is what the UI's "Delete shop" does.
 - `POST /shop-areas` is find-or-create, case- and whitespace-insensitive: it
   returns 200 with the existing area, or 201 with a new one.
+- `GET /shop-areas` returns `shop_count` per area — how many shops sit in it.
+- `DELETE /shop-areas/:id` refuses with 409 while shops are still in the area,
+  rather than silently stripping it off them. Resolve it explicitly with one of:
+  `?reassignTo=<areaId>` (move those shops to another area first) or
+  `?force=true` (leave them with no area). An unused area deletes as-is. The
+  response carries `shops_affected`.
 
 ## Catalogue
 

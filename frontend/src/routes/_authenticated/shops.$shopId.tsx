@@ -52,7 +52,6 @@ import {
   ORDER_STATUSES,
   currentFinancialYear,
   currentMonth,
-  defaultMonthForFinancialYear,
   monthKey,
   monthLabel,
 } from "@/lib/domain";
@@ -255,9 +254,9 @@ function ShopDetail() {
             <div className="flex flex-wrap items-center gap-2">
               <FinancialYearPicker
                 value={orderFy}
-                onChange={(fy) => {
+                onChange={(fy, suggestedMonth) => {
                   setOrderFy(fy);
-                  setOrderMonth(defaultMonthForFinancialYear(fy));
+                  setOrderMonth(suggestedMonth);
                 }}
                 dates={(history.data?.orders ?? []).map((o) => o.order_date)}
               />
@@ -319,9 +318,9 @@ function ShopDetail() {
           <div className="mb-3 flex items-center justify-end gap-2">
             <FinancialYearPicker
               value={deliveryFy}
-              onChange={(fy) => {
+              onChange={(fy, suggestedMonth) => {
                 setDeliveryFy(fy);
-                setDeliveryMonth(defaultMonthForFinancialYear(fy));
+                setDeliveryMonth(suggestedMonth);
               }}
               dates={(history.data?.deliveries ?? []).map((d) => d.delivery_date)}
             />

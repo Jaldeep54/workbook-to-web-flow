@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronsUpDown, Loader2, LocateFixed, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Check, ChevronsUpDown, Loader2, LocateFixed } from "lucide-react";
 import { toast } from "sonner";
 
 import { useMapsUnavailableReason } from "@/components/map-unavailable";
@@ -15,10 +15,18 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { getCurrentPosition, reverseGeocodeArea } from "@/lib/geocode";
-import { shopAreasQuery, upsertShopArea } from "@/lib/queries";
+import { shopAreasQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import type { ShopArea } from "@/lib/domain";
 
-/** Searchable Shop Area picker with an inline "Add New Area" — used in the shop create/edit form. */
+/**
+ * Shop Area picker for the shop create/edit form — a search-and-select over
+ * the centrally managed area list, and nothing more.
+ *
+ * Areas are deliberately *not* creatable from here. Typing a new one while
+ * adding a shop is what produced "adajan" alongside "Adajan"; they are added
+ * once in Shops → Shop areas and picked from that list everywhere else.
+ */
 export function ShopAreaSelect({
   value,
   onChange,
@@ -26,32 +34,12 @@ export function ShopAreaSelect({
   value: string | null;
   onChange: (areaId: string, areaName: string) => void;
 }) {
-  const qc = useQueryClient();
   const { data: areas = [] } = useQuery(shopAreasQuery);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [creating, setCreating] = useState(false);
 
   const selected = areas.find((a) => a.id === value);
   const trimmedSearch = search.trim();
-  const exactMatch = areas.some((a) => a.name.toLowerCase() === trimmedSearch.toLowerCase());
-
-  const createArea = async () => {
-    if (!trimmedSearch) return;
-    setCreating(true);
-    try {
-      const area = await upsertShopArea(trimmedSearch);
-      await qc.invalidateQueries({ queryKey: ["shop_areas"] });
-      onChange(area.id, area.name);
-      setSearch("");
-      setOpen(false);
-      toast.success(`Area "${area.name}" added`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not create area");
-    } finally {
-      setCreating(false);
-    }
-  };
 
   return (
     <div className="flex gap-2">
@@ -75,7 +63,9 @@ export function ShopAreaSelect({
             <CommandInput placeholder="Search area…" value={search} onValueChange={setSearch} />
             <CommandList>
               <CommandEmpty className="px-3 py-4 text-sm text-muted-foreground">
-                {trimmedSearch ? "No matching area." : "No areas yet."}
+                {areas.length === 0
+                  ? "No areas set up yet — add them in Shops → Shop areas."
+                  : `No area matches "${trimmedSearch}". Add it in Shops → Shop areas.`}
               </CommandEmpty>
               <CommandGroup>
                 {areas
@@ -98,39 +88,30 @@ export function ShopAreaSelect({
                   ))}
               </CommandGroup>
             </CommandList>
-            {trimmedSearch && !exactMatch && (
-              <div className="border-t border-border p-1">
-                <button
-                  type="button"
-                  onClick={() => void createArea()}
-                  disabled={creating}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-primary hover:bg-accent disabled:opacity-50"
-                >
-                  <Plus className="size-4" />
-                  {creating ? "Adding…" : `Add New Area "${trimmedSearch}"`}
-                </button>
-              </div>
-            )}
           </Command>
         </PopoverContent>
       </Popover>
-      <DetectAreaButton onChange={onChange} />
+      <DetectAreaButton areas={areas} onChange={onChange} />
     </div>
   );
 }
 
 /**
- * Fills the area in from where the device actually is — the shop is usually
+ * Picks the area from where the device actually is — the shop is usually
  * being added while standing in front of it. The browser asks for location
- * permission on the first click; declining it just shows the reason and
- * leaves the picker alone.
+ * permission on the first click.
  *
- * A detected name that matches an existing area (case-insensitively) selects
- * that area rather than creating a near-duplicate; anything new is added to
- * the area list, which is what `upsertShopArea` already does for a typed name.
+ * It only ever *selects* an existing area. If the detected neighbourhood
+ * isn't on the list it says so rather than creating it, so a stray GPS
+ * reading can't quietly invent a new area.
  */
-function DetectAreaButton({ onChange }: { onChange: (id: string, name: string) => void }) {
-  const qc = useQueryClient();
+function DetectAreaButton({
+  areas,
+  onChange,
+}: {
+  areas: ShopArea[];
+  onChange: (id: string, name: string) => void;
+}) {
   const mapsUnavailable = useMapsUnavailableReason();
   const [detecting, setDetecting] = useState(false);
 
@@ -140,13 +121,18 @@ function DetectAreaButton({ onChange }: { onChange: (id: string, name: string) =
       const pos = await getCurrentPosition();
       const { areaName } = await reverseGeocodeArea(pos.latitude, pos.longitude);
       if (!areaName) {
-        toast.error("Could not work out an area name for your location — pick or type one instead");
+        toast.error("Could not work out an area name for your location — pick one instead");
         return;
       }
-      const area = await upsertShopArea(areaName);
-      await qc.invalidateQueries({ queryKey: ["shop_areas"] });
-      onChange(area.id, area.name);
-      toast.success(`Area detected: ${area.name}`);
+      const match = areas.find((a) => a.name.toLowerCase() === areaName.toLowerCase());
+      if (!match) {
+        toast.error(`You seem to be in "${areaName}", which isn't in the area list yet`, {
+          description: "Add it in Shops → Shop areas, then pick it here.",
+        });
+        return;
+      }
+      onChange(match.id, match.name);
+      toast.success(`Area detected: ${match.name}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not detect the area");
     } finally {

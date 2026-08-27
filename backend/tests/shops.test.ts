@@ -213,7 +213,66 @@ describe("Shops, areas and files", () => {
     expectError(await admin.patch(`/shop-areas/${first.body.data.id}`).send({ name: "Adajan" }), 409);
   });
 
-  it("unassigns the area from its shops when the area is deleted", async () => {
+  it("reports how many shops each area holds", async () => {
+    const area = await admin.post("/shop-areas").send({ name: "Counted Area" });
+    const areaId = area.body.data.id;
+    expect(area.body.data.shop_count).toBeUndefined();
+
+    const listed = (await admin.get("/shop-areas")).body.data;
+    expect(listed.find((a: { id: string }) => a.id === areaId).shop_count).toBe(0);
+
+    await admin.post("/shops").send({
+      code: "80",
+      shop_name: "Counted Shop",
+      area_id: areaId,
+      product_ids: productIds.slice(0, 1),
+    });
+
+    const recounted = (await admin.get("/shop-areas")).body.data;
+    expect(recounted.find((a: { id: string }) => a.id === areaId).shop_count).toBe(1);
+  });
+
+  it("refuses to delete an area while shops are still in it", async () => {
+    const area = await admin.post("/shop-areas").send({ name: "Occupied Area" });
+    const shop = await admin.post("/shops").send({
+      code: "78",
+      shop_name: "Occupied Shop",
+      area_id: area.body.data.id,
+      product_ids: productIds.slice(0, 1),
+    });
+
+    expectError(await admin.delete(`/shop-areas/${area.body.data.id}`), 409);
+    // Refused means untouched: the shop keeps its area.
+    expect((await admin.get(`/shops/${shop.body.data.id}`)).body.data.area_id).toBe(
+      area.body.data.id,
+    );
+  });
+
+  it("moves the shops to another area when one is named", async () => {
+    const from = await admin.post("/shop-areas").send({ name: "Merge Source" });
+    const to = await admin.post("/shop-areas").send({ name: "Merge Target" });
+    const shop = await admin.post("/shops").send({
+      code: "79",
+      shop_name: "Merged Shop",
+      area_id: from.body.data.id,
+      product_ids: productIds.slice(0, 1),
+    });
+
+    // The area being deleted is not a valid destination for its own shops.
+    expectError(
+      await admin.delete(`/shop-areas/${from.body.data.id}?reassignTo=${from.body.data.id}`),
+      400,
+    );
+
+    const deleted = await admin.delete(
+      `/shop-areas/${from.body.data.id}?reassignTo=${to.body.data.id}`,
+    );
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.data.shops_affected).toBe(1);
+    expect((await admin.get(`/shops/${shop.body.data.id}`)).body.data.area_id).toBe(to.body.data.id);
+  });
+
+  it("unassigns the area from its shops when the delete is forced", async () => {
     const area = await admin.post("/shop-areas").send({ name: "Temporary Area" });
     const shop = await admin.post("/shops").send({
       code: "77",
@@ -222,9 +281,14 @@ describe("Shops, areas and files", () => {
       product_ids: productIds.slice(0, 1),
     });
 
-    expect((await admin.delete(`/shop-areas/${area.body.data.id}`)).status).toBe(200);
+    expect((await admin.delete(`/shop-areas/${area.body.data.id}?force=true`)).status).toBe(200);
     const after = await admin.get(`/shops/${shop.body.data.id}`);
     expect(after.body.data.area_id).toBeNull();
+  });
+
+  it("deletes an unused area with no ceremony", async () => {
+    const area = await admin.post("/shop-areas").send({ name: "Unused Area" });
+    expect((await admin.delete(`/shop-areas/${area.body.data.id}`)).status).toBe(200);
   });
 
   it("stores a shop image behind a signed URL", async () => {

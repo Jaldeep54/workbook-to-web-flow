@@ -34,13 +34,7 @@ import { ordersApi } from "@/services/klinzo.service";
 import { productsQuery, shopsQuery } from "@/lib/queries";
 import { deliverySheetQuery, deliveryDueDatesQuery } from "@/lib/records";
 import { downloadBills } from "@/lib/generate-bill";
-import {
-  ORDER_STATUSES,
-  currentFinancialYear,
-  currentMonth,
-  defaultMonthForFinancialYear,
-  monthKey,
-} from "@/lib/domain";
+import { ORDER_STATUSES, currentFinancialYear, currentMonth, monthKey } from "@/lib/domain";
 import { dateLabel, num, todayISO } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 
@@ -150,11 +144,10 @@ function DeliverySheetPage() {
           <>
             <FinancialYearPicker
               value={fy}
-              onChange={(newFy) => {
+              onChange={(newFy, suggestedMonth) => {
                 setFy(newFy);
-                const m = defaultMonthForFinancialYear(newFy);
-                setMonth(m);
-                setDate(m);
+                setMonth(suggestedMonth);
+                setDate(suggestedMonth);
               }}
               dates={dueDates}
             />

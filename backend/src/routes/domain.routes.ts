@@ -41,6 +41,7 @@ import {
   productCreateSchema,
   productUpdateSchema,
   shopAnalysisQuery,
+  shopAreaDeleteQuery,
   shopAreaSchema,
   shopBodySchema,
   shopListQuery,
@@ -143,7 +144,7 @@ shopAreaRouter.patch(
 shopAreaRouter.delete(
   "/:id",
   authorize(RESOURCES.shopAreas, "delete"),
-  validate({ params: idParam }),
+  validate({ params: idParam, query: shopAreaDeleteQuery }),
   asyncHandler(shops.deleteShopArea),
 );
 

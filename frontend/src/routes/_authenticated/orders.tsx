@@ -36,13 +36,7 @@ import { Can, RESOURCES } from "@/hooks/usePermissions";
 import { ordersApi } from "@/services/klinzo.service";
 import { productsQuery, shopsQuery } from "@/lib/queries";
 import { ordersQuery, type OrderRecord } from "@/lib/records";
-import {
-  currentFinancialYear,
-  currentMonth,
-  defaultMonthForFinancialYear,
-  monthLabel,
-  monthKey,
-} from "@/lib/domain";
+import { currentFinancialYear, currentMonth, monthLabel, monthKey } from "@/lib/domain";
 import { dateLabel, num } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 
@@ -167,9 +161,9 @@ function OrdersPage() {
           <>
             <FinancialYearPicker
               value={fy}
-              onChange={(newFy) => {
+              onChange={(newFy, suggestedMonth) => {
                 setFy(newFy);
-                setMonth(defaultMonthForFinancialYear(newFy));
+                setMonth(suggestedMonth);
               }}
               dates={orders.map((o) => o.order_date)}
             />

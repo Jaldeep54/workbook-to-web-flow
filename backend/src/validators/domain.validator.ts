@@ -42,6 +42,12 @@ export const shopAreaSchema = z.object({
   name: z.string().trim().min(1, "Area name cannot be empty").max(120),
 });
 
+/** How to resolve the shops still sitting in an area being deleted. */
+export const shopAreaDeleteQuery = z.object({
+  reassignTo: z.string().trim().min(1).optional(),
+  force: z.enum(["true", "false"]).optional(),
+});
+
 /* --------------------------------------------------------------- catalogue */
 
 export const productUpdateSchema = z

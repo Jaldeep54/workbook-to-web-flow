@@ -272,9 +272,25 @@ export async function getShopHistory(req: Request, res: Response) {
 
 /* -------------------------------------------------------------- shop areas */
 
+/**
+ * Every area with the number of shops sitting in it. The count is what makes
+ * an area safe to manage: the UI shows what a rename affects and refuses to
+ * quietly strip an area off shops that are still using it.
+ */
 export async function listShopAreas(_req: Request, res: Response) {
-  const areas = await ShopArea.find().sort({ name: 1 }).lean();
-  return ok(res, areas.map((a) => ({ id: a._id, name: a.name })));
+  const [areas, counts] = await Promise.all([
+    ShopArea.find().sort({ name: 1 }).lean(),
+    Shop.aggregate<{ _id: string; count: number }>([
+      { $match: { area_id: { $ne: null } } },
+      { $group: { _id: "$area_id", count: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const countById = new Map(counts.map((c) => [c._id, c.count]));
+  return ok(
+    res,
+    areas.map((a) => ({ id: a._id, name: a.name, shop_count: countById.get(a._id) ?? 0 })),
+  );
 }
 
 /**
@@ -314,12 +330,47 @@ export async function updateShopArea(req: Request, res: Response) {
   return ok(res, { id: area._id, name: area.name });
 }
 
+/**
+ * Deleting an area that still holds shops is refused, because silently
+ * stripping the area off them loses information no one asked to lose. The
+ * caller resolves it explicitly instead:
+ *
+ *   ?reassignTo=<areaId>  move those shops to another area, then delete
+ *   ?force=true           leave them with no area, then delete
+ *
+ * An unused area deletes with no ceremony.
+ */
 export async function deleteShopArea(req: Request, res: Response) {
   const area = await ShopArea.findById(req.params.id);
   if (!area) throw ApiError.notFound("Shop area not found");
 
-  // Shops keep working without an area, so unassign rather than block.
-  await Shop.updateMany({ area_id: area._id }, { $set: { area_id: null } });
+  const { reassignTo, force } = req.query as { reassignTo?: string; force?: string };
+  const inUse = await Shop.countDocuments({ area_id: area._id });
+  let movedTo: string | null = null;
+
+  if (inUse > 0) {
+    if (reassignTo) {
+      if (reassignTo === area._id) {
+        throw ApiError.badRequest("Choose a different area to move these shops to");
+      }
+      const target = await ShopArea.findById(reassignTo, { name: 1 }).lean();
+      if (!target) throw ApiError.badRequest("The area to move these shops to no longer exists");
+      await Shop.updateMany({ area_id: area._id }, { $set: { area_id: target._id } });
+      movedTo = target.name;
+    } else if (force === "true") {
+      await Shop.updateMany({ area_id: area._id }, { $set: { area_id: null } });
+    } else {
+      throw ApiError.conflict(
+        `${inUse} shop${inUse === 1 ? "" : "s"} still in "${area.name}". Move them to another area first, or confirm they should be left without one.`,
+      );
+    }
+  }
+
   await area.deleteOne();
-  return ok(res, { message: "Shop area deleted" });
+  return ok(res, {
+    message: movedTo
+      ? `Shop area deleted — ${inUse} shop${inUse === 1 ? "" : "s"} moved to "${movedTo}"`
+      : "Shop area deleted",
+    shops_affected: inUse,
+  });
 }

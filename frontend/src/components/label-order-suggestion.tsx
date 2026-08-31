@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, RotateCcw, Send, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { DataPagination, usePagination } from "@/components/data-pagination";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -264,6 +265,14 @@ export function LabelOrderSuggestionTab({
 
   const suggestionGroups = useMemo(() => visibleGroups.filter((g) => !g.manual), [visibleGroups]);
 
+  /**
+   * Paging is presentation only. Which shops are ticked lives in
+   * `includeOverride`, keyed by shop, so a selection made on one page is still
+   * part of "Place Selected Orders" from any other — and the totals below
+   * count every selected shop, not the visible ones.
+   */
+  const pagination = usePagination(visibleGroups, { resetKey: visibleGroups.length });
+
   const isIncluded = (g: ShopGroup) => includeOverride[g.shopId] ?? true;
 
   const finalQty = (row: LabelOrderSuggestionRow) =>
@@ -485,7 +494,7 @@ export function LabelOrderSuggestionTab({
             setAddShopValue("");
           }}
         >
-          <SelectTrigger className="w-[240px] max-w-full bg-card">
+          <SelectTrigger className="w-full bg-card sm:w-[240px]">
             <SelectValue placeholder="+ Add a shop manually" />
           </SelectTrigger>
           <SelectContent>
@@ -534,7 +543,7 @@ export function LabelOrderSuggestionTab({
                   </TableCell>
                 </TableRow>
               )}
-              {visibleGroups.map((g) => {
+              {pagination.pageRows.map((g) => {
                 const rowLabels = labelProducts.reduce((a, lp) => {
                   const row = g.rowByLabelProduct.get(lp.id);
                   if (!row) return a;
@@ -725,6 +734,7 @@ export function LabelOrderSuggestionTab({
             </TableBody>
           </Table>
         </div>
+        <DataPagination pagination={pagination} noun="shops" />
         <div className="flex items-center justify-end border-t border-border p-3">
           <Can resource={RESOURCES.labelOrders} action="create">
             <Button onClick={openPlaceOrders} disabled={totals.sheets === 0}>

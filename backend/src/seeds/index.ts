@@ -5,6 +5,7 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { ADMIN_ROLE_SLUG } from "../models/role.model.js";
 import { User, hashPassword } from "../models/user.model.js";
+import { backfillPaymentAmountReceived } from "./backfill.seed.js";
 import { seedCatalogue } from "./catalogue.seed.js";
 import { seedPermissions, seedRoles } from "./permissions.seed.js";
 
@@ -33,6 +34,7 @@ export async function runSeed(options: { reset?: boolean } = {}): Promise<void> 
   const permissionIdByName = await seedPermissions();
   const roleIdBySlug = await seedRoles(permissionIdByName);
   await seedCatalogue();
+  await backfillPaymentAmountReceived();
 
   const adminRoleId = roleIdBySlug.get(ADMIN_ROLE_SLUG);
   if (!adminRoleId) throw new Error("Admin role was not created");

@@ -169,12 +169,21 @@ export const monthListQuery = listQuery.extend({
 
 /* ---------------------------------------------------------------- payments */
 
+/** Adds the Payments screen's own filters to the shared month/shop/area query. */
+export const paymentListQuery = monthListQuery.extend({
+  status: z.enum(PAYMENT_STATUSES).optional(),
+});
+
 export const paymentUpdateSchema = z
   .object({
     status: z.enum(PAYMENT_STATUSES).optional(),
     collected_by: z.string().trim().max(80).nullish(),
+    /** When set, the API overwrites `collected_by` with that user's name. */
+    collected_by_user_id: idString.nullish(),
     collected_date: isoDate.nullish(),
     amount: z.coerce.number().min(0).optional(),
+    /** Running total of what the shop has actually handed over. */
+    amount_received: z.coerce.number().min(0).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, "Provide at least one field to update");
 

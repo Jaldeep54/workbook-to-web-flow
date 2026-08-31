@@ -4,6 +4,7 @@ import {
   LabelOrder,
   Order,
   Payment,
+  derivePaymentStatus,
   type IOrder,
   type OrderStatus,
 } from "../models/order.model.js";
@@ -97,8 +98,9 @@ export async function nextOrderNo(
  * order delivered. Re-runnable: editing a delivered order re-runs this and the
  * frozen figures follow the edit.
  *
- * A payment already marked Received keeps its amount (the money really did
- * arrive); anything else is re-synced to the new sales figure.
+ * A payment already settled in full keeps its amount (the money really did
+ * arrive); anything else is re-synced to the new sales figure, carrying any
+ * part payment already collected across untouched.
  */
 export async function setOrderDelivered(orderId: string, deliveryDate: string): Promise<string> {
   const order = await Order.findById(orderId).lean();
@@ -127,12 +129,20 @@ export async function setOrderDelivered(orderId: string, deliveryDate: string): 
 
   const existingPayment = await Payment.findOne({ order_id: orderId }).lean();
   if (existingPayment) {
+    // Money already collected is never rewritten — it really did arrive. The
+    // bill itself follows the edit unless it has been settled in full, and the
+    // status is re-derived so a re-priced order that is now only part paid
+    // stops claiming to be Received.
+    const received = Number(existingPayment.amount_received) || 0;
+    const amount = existingPayment.status === "Received" ? existingPayment.amount : totals.total_sales;
     await Payment.updateOne(
       { order_id: orderId },
       {
         $set: {
           shop_id: order.shop_id,
-          ...(existingPayment.status === "Received" ? {} : { amount: totals.total_sales }),
+          amount,
+          amount_received: received,
+          status: derivePaymentStatus(amount, received),
         },
       },
     );
@@ -142,8 +152,8 @@ export async function setOrderDelivered(orderId: string, deliveryDate: string): 
       order_id: orderId,
       payment_date: deliveryDate,
       month: `${deliveryDate.slice(0, 7)}-01`,
-      status: "Pending",
       amount: totals.total_sales,
+      amount_received: 0,
     });
   }
 
@@ -158,11 +168,11 @@ export async function setOrderDelivered(orderId: string, deliveryDate: string): 
 /**
  * Moves an order to Pending / Delivered / Cancelled.
  *
- * Leaving Delivered removes the payment unless it was already Received — in
- * which case the delivery row is kept too (the money is real), but its status
- * is moved in step with the order so the two can never disagree. That last
- * detail was a real bug in the SQL version: the surviving delivery row silently
- * stayed "Delivered" forever.
+ * Leaving Delivered removes the payment unless money has already been
+ * collected against it, in full or in part — in which case the delivery row is
+ * kept too (the money is real), but its status is moved in step with the order
+ * so the two can never disagree. That last detail was a real bug in the SQL
+ * version: the surviving delivery row silently stayed "Delivered" forever.
  */
 export async function setOrderStatus(
   orderId: string,
@@ -178,8 +188,12 @@ export async function setOrderStatus(
     return;
   }
 
-  await Payment.deleteOne({ order_id: orderId, status: { $ne: "Received" } });
-  const receivedPayment = await Payment.exists({ order_id: orderId, status: "Received" });
+  // Any money already collected — in full or in part — is real, so those rows
+  // survive; only a payment nothing has been paid against is withdrawn.
+  // `$not: $gt` rather than `$lte`, so rows written before amount_received
+  // existed (where the field is simply absent) still count as unpaid.
+  await Payment.deleteOne({ order_id: orderId, amount_received: { $not: { $gt: 0 } } });
+  const receivedPayment = await Payment.exists({ order_id: orderId });
   if (!receivedPayment) {
     await Delivery.deleteOne({ order_id: orderId });
   } else {

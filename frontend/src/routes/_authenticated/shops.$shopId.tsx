@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { DataPagination, usePagination } from "@/components/data-pagination";
 import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { MonthPicker } from "@/components/month-picker";
 import { NewOrderDialog } from "@/components/new-order-dialog";
@@ -191,9 +192,12 @@ function ShopDetail() {
   };
 
   const sales = (history.data?.deliveries ?? []).reduce((a, d) => a + Number(d.total_sales), 0);
-  const received = (history.data?.payments ?? [])
-    .filter((p) => p.status === "Received")
-    .reduce((a, p) => a + Number(p.amount), 0);
+  // Every rupee actually collected from this shop, including instalments
+  // against bills that are still only part paid.
+  const received = (history.data?.payments ?? []).reduce(
+    (a, p) => a + Number(p.amount_received ?? 0),
+    0,
+  );
   const profit = (history.data?.deliveries ?? []).reduce((a, d) => a + Number(d.profit), 0);
   const shopStock = stock.filter((r) => r.shop_id === shopId);
 
@@ -214,6 +218,16 @@ function ShopDetail() {
       ),
     [history.data, deliveryMonth],
   );
+  const shopPayments = useMemo(() => history.data?.payments ?? [], [history.data]);
+
+  const orderPages = usePagination(filteredOrders, { pageSize: 10, resetKey: orderMonth });
+  const deliveryPages = usePagination(filteredDeliveries, {
+    pageSize: 10,
+    resetKey: deliveryMonth,
+  });
+  // Payments cover the shop's whole history rather than one month, so this is
+  // the tab that most needs paging.
+  const paymentPages = usePagination(shopPayments, { pageSize: 10 });
 
   return (
     <>
@@ -268,49 +282,52 @@ function ShopDetail() {
               </Can>
             </div>
           </div>
-          <div className="surface-card overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order date</TableHead>
-                  <TableHead>Delivery date</TableHead>
-                  <TableHead className="text-right">Order no</TableHead>
-                  {products.map((p) => (
-                    <TableHead key={p.id} className="text-right">
-                      {p.short_name}
-                    </TableHead>
-                  ))}
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.map((o) => (
-                  <TableRow key={o.id}>
-                    <TableCell>{dateLabel(o.order_date)}</TableCell>
-                    <TableCell>{dateLabel(o.delivery_date)}</TableCell>
-                    <TableCell className="num text-right">{o.order_no}</TableCell>
-                    {products.map((p) => (
-                      <TableCell key={p.id} className="num text-right">
-                        {qtyFor(o, p.id) || "—"}
-                      </TableCell>
-                    ))}
-                    <TableCell className="num text-right font-semibold">
-                      {num(o.total_qty)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredOrders.length === 0 && (
+          <div className="surface-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell
-                      colSpan={products.length + 4}
-                      className="py-10 text-center text-muted-foreground"
-                    >
-                      No orders in {monthLabel(orderMonth)}.
-                    </TableCell>
+                    <TableHead>Order date</TableHead>
+                    <TableHead>Delivery date</TableHead>
+                    <TableHead className="text-right">Order no</TableHead>
+                    {products.map((p) => (
+                      <TableHead key={p.id} className="text-right">
+                        {p.short_name}
+                      </TableHead>
+                    ))}
+                    <TableHead className="text-right">Total</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {orderPages.pageRows.map((o) => (
+                    <TableRow key={o.id}>
+                      <TableCell>{dateLabel(o.order_date)}</TableCell>
+                      <TableCell>{dateLabel(o.delivery_date)}</TableCell>
+                      <TableCell className="num text-right">{o.order_no}</TableCell>
+                      {products.map((p) => (
+                        <TableCell key={p.id} className="num text-right">
+                          {qtyFor(o, p.id) || "—"}
+                        </TableCell>
+                      ))}
+                      <TableCell className="num text-right font-semibold">
+                        {num(o.total_qty)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredOrders.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={products.length + 4}
+                        className="py-10 text-center text-muted-foreground"
+                      >
+                        No orders in {monthLabel(orderMonth)}.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <DataPagination pagination={orderPages} noun="orders" />
           </div>
         </TabsContent>
 
@@ -330,111 +347,144 @@ function ShopDetail() {
               financialYear={deliveryFy}
             />
           </div>
-          <div className="surface-card overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Sales</TableHead>
-                  <TableHead className="text-right">Fixed cost</TableHead>
-                  <TableHead className="text-right">Profit</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDeliveries.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell>{dateLabel(d.delivery_date)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={d.status ?? "Pending"}
-                          disabled={!canSetStatus}
-                          onValueChange={(status) =>
-                            setDeliveryStatus.mutate({ delivery: d, status })
-                          }
-                        >
-                          <SelectTrigger className="w-[130px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ORDER_STATUSES.map((s) => (
-                              <SelectItem key={s} value={s}>
-                                {s}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {d.status === "Delivered" && <Badge>Synced</Badge>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="num text-right">{num(d.total_qty)}</TableCell>
-                    <TableCell className="num text-right">{inr(d.total_sales)}</TableCell>
-                    <TableCell className="num text-right">{inr(d.total_fixed_cost)}</TableCell>
-                    <TableCell className="num text-right font-semibold">{inr(d.profit)}</TableCell>
-                  </TableRow>
-                ))}
-                {filteredDeliveries.length === 0 && (
+          <div className="surface-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                      No deliveries in {monthLabel(deliveryMonth)}.
-                    </TableCell>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Sales</TableHead>
+                    <TableHead className="text-right">Fixed cost</TableHead>
+                    <TableHead className="text-right">Profit</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {deliveryPages.pageRows.map((d) => (
+                    <TableRow key={d.id}>
+                      <TableCell>{dateLabel(d.delivery_date)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={d.status ?? "Pending"}
+                            disabled={!canSetStatus}
+                            onValueChange={(status) =>
+                              setDeliveryStatus.mutate({ delivery: d, status })
+                            }
+                          >
+                            <SelectTrigger className="w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ORDER_STATUSES.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  {s}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {d.status === "Delivered" && <Badge>Synced</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="num text-right">{num(d.total_qty)}</TableCell>
+                      <TableCell className="num text-right">{inr(d.total_sales)}</TableCell>
+                      <TableCell className="num text-right">{inr(d.total_fixed_cost)}</TableCell>
+                      <TableCell className="num text-right font-semibold">
+                        {inr(d.profit)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredDeliveries.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                        No deliveries in {monthLabel(deliveryMonth)}.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <DataPagination pagination={deliveryPages} noun="deliveries" />
           </div>
         </TabsContent>
 
         <TabsContent value="payments" className="pt-4">
-          <div className="surface-card overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Collected by</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(history.data?.payments ?? []).map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell>{dateLabel(p.payment_date)}</TableCell>
-                    <TableCell>
-                      <Badge variant={p.status === "Received" ? "default" : "secondary"}>
-                        {p.status ?? "—"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{p.collected_by ?? "—"}</TableCell>
-                    <TableCell className="num text-right font-semibold">{inr(p.amount)}</TableCell>
-                    <TableCell className="text-right">
-                      {p.status !== "Received" && (
-                        <Can resource={RESOURCES.payments} action="update">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openReceive(p)}
-                            disabled={markReceived.isPending}
-                          >
-                            Mark Received
-                          </Button>
-                        </Can>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(history.data?.payments ?? []).length === 0 && (
+          <div className="surface-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                      No payments yet.
-                    </TableCell>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Collected by</TableHead>
+                    <TableHead className="text-right">Bill amount</TableHead>
+                    <TableHead className="text-right">Received</TableHead>
+                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {paymentPages.pageRows.map((p) => {
+                    const balance = Math.max(0, Number(p.amount) - Number(p.amount_received ?? 0));
+                    return (
+                      <TableRow key={p.id}>
+                        <TableCell>{dateLabel(p.payment_date)}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={p.status === "Received" ? "default" : "secondary"}
+                            className={
+                              p.status === "Received"
+                                ? "gap-1 border-transparent bg-success text-success-foreground"
+                                : undefined
+                            }
+                          >
+                            {p.status === "Received" && <CheckCircle2 className="size-3.5" />}
+                            {p.status ?? "—"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{p.collected_by ?? "—"}</TableCell>
+                        <TableCell className="num text-right font-semibold">
+                          {inr(p.amount)}
+                        </TableCell>
+                        <TableCell className="num text-right">
+                          {inr(p.amount_received ?? 0)}
+                        </TableCell>
+                        <TableCell
+                          className={`num text-right font-semibold ${
+                            balance > 0 ? "text-destructive" : "text-success"
+                          }`}
+                        >
+                          {balance > 0 ? inr(balance) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {p.status !== "Received" && (
+                            <Can resource={RESOURCES.payments} action="update">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openReceive(p)}
+                                disabled={markReceived.isPending}
+                              >
+                                Mark Received
+                              </Button>
+                            </Can>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {shopPayments.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                        No payments yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <DataPagination pagination={paymentPages} noun="payments" />
           </div>
         </TabsContent>
 

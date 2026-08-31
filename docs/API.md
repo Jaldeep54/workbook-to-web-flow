@@ -236,12 +236,42 @@ payment has already been received.
 
 | Method | Path | Permission |
 |---|---|---|
-| GET | `/payments` | `payments:view` |
+| GET | `/payments?month=&shopId=&areaId=&status=&search=` | `payments:view` |
+| GET | `/payments/collectors` | `payments:view` |
 | GET | `/payments/:id` | `payments:view` |
 | PATCH | `/payments/:id` | `payments:update` |
 
 Payments are raised by the delivery flow — there is no create endpoint.
-`PATCH` accepts `{ status?, collected_by?, collected_date?, amount? }`.
+
+A shop settles its bill in instalments, so a payment carries two money figures:
+`amount`, what the order is worth, and `amount_received`, the running total of
+what has actually been handed over. Every row also returns `balance`
+(`amount − amount_received`, never negative), and **`status` is derived from
+the two, never set independently**:
+
+| received | status |
+|---|---|
+| nothing | `Pending` |
+| less than `amount` | `Partial` |
+| `amount` or more | `Received` |
+
+`PATCH` accepts
+`{ amount?, amount_received?, status?, collected_by?, collected_by_user_id?, collected_date? }`.
+Sending `amount_received` above `amount` is a 400. A `status` sent on its own is
+shorthand for a money movement — `Received` settles the bill in full, `Pending`
+withdraws the collection — and the derived status is recomputed either way.
+
+`collected_by_user_id` names one of the accounts from `/payments/collectors`
+(every active user). The API copies that account's name onto `collected_by`, so
+a collection keeps reading correctly after the account is renamed or
+deactivated.
+
+`search` matches the payment's shop by name, billing name, label or code, and
+intersects with `areaId` and `shopId` rather than replacing them.
+
+> Payments written before `amount_received` existed are filled in by
+> `npm run seed`, which treats a `Received` row as fully paid and every other
+> row as unpaid.
 
 ## Label orders and stock
 
@@ -314,8 +344,15 @@ scopes everything except `variableCost`, which has no area dimension.
 | GET | `/health` | public |
 
 `POST /bills` takes `{ orderIds: [...] }` and returns one payload per order —
-invoice number (stable per order), line items, totals — in the order given. The
-PDF is rendered by the frontend from that payload.
+invoice number, shop code, line items, totals — in the order given. The PDF is
+rendered by the frontend from that payload.
+
+The invoice number **is** the order number (`invoiceNo` = the order's
+`order_no`), so the figure a shopkeeper reads off a bill is the one the Orders
+screen shows. Order numbers run per shop, so the payload also carries
+`shopCode`, and the two print together as `INV-<shopCode>-<order no>`
+(e.g. `INV-KL012-0007`). Nothing is allocated, so regenerating a bill always
+reproduces the same number.
 
 `POST /import/workbook` is `multipart/form-data` with a `workbook` field
 (`.xlsx`/`.xlsm`/`.xls`) and returns counts plus warnings. Re-running updates

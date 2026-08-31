@@ -5,10 +5,13 @@ import { Download, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { DataPagination, usePagination } from "@/components/data-pagination";
 import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { MonthPicker } from "@/components/month-picker";
 import { ShopAreaFilter, ShopFilter } from "@/components/filter-bar";
 import { ProductQtyGrid } from "@/components/product-qty-grid";
+import { RecordCard, RecordCards, RecordField } from "@/components/record-card";
+import { SearchInput, matchesSearch } from "@/components/search-input";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +71,7 @@ function DeliveriesPage() {
   const [month, setMonth] = useState(currentMonth());
   const [shopFilter, setShopFilter] = useState("all");
   const [areaFilter, setAreaFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [orderId, setOrderId] = useState("");
   const [deliveryDate, setDeliveryDate] = useState(todayISO());
@@ -79,10 +83,30 @@ function DeliveriesPage() {
   const { data: allDeliveries = [], isLoading } = useQuery(deliveriesQuery(month, shopFilter));
 
   const deliveries = useMemo(() => {
-    if (areaFilter === "all") return allDeliveries;
-    const shopIdsInArea = new Set(shops.filter((s) => s.area_id === areaFilter).map((s) => s.id));
-    return allDeliveries.filter((d) => shopIdsInArea.has(d.shop_id));
-  }, [allDeliveries, shops, areaFilter]);
+    const inArea =
+      areaFilter === "all"
+        ? allDeliveries
+        : (() => {
+            const shopIdsInArea = new Set(
+              shops.filter((s) => s.area_id === areaFilter).map((s) => s.id),
+            );
+            return allDeliveries.filter((d) => shopIdsInArea.has(d.shop_id));
+          })();
+    return inArea.filter((d) =>
+      matchesSearch(search, d.shops?.shop_name, d.shops?.label_name, d.shops?.code),
+    );
+  }, [allDeliveries, shops, areaFilter, search]);
+
+  // The sales/cost/profit cards above read `deliveries`, so they always cover
+  // the whole filtered month rather than the page on screen.
+  const pagination = usePagination(deliveries, {
+    resetKey: `${month}-${shopFilter}-${areaFilter}-${search}`,
+  });
+
+  const emptyMessage =
+    allDeliveries.length === 0
+      ? `No deliveries in ${monthLabel(month)}.`
+      : "No deliveries match the current filters.";
 
   // Orders that don't have a delivery yet — the only things a delivery can be
   // recorded against.
@@ -164,8 +188,10 @@ function DeliveriesPage() {
               onChange={setShopFilter}
               areaId={areaFilter !== "all" ? areaFilter : undefined}
             />
+            <SearchInput value={search} onChange={setSearch} placeholder="Search shop…" />
             <Button
               variant="outline"
+              className="col-span-2 sm:col-span-1"
               onClick={() =>
                 downloadCsv(
                   `klinzo-deliveries-${month}`,
@@ -268,7 +294,7 @@ function DeliveriesPage() {
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard label="Sales this month" value={inr(totalSales)} tone="accent" />
         <StatCard label="Fixed cost" value={inr(totalCost)} />
         <StatCard
@@ -278,59 +304,104 @@ function DeliveriesPage() {
         />
       </div>
 
-      <div className="surface-card overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Shop</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Sales</TableHead>
-              <TableHead className="text-right">Labelling</TableHead>
-              <TableHead className="text-right">Jar & can</TableHead>
-              <TableHead className="text-right">Production</TableHead>
-              <TableHead className="text-right">Profit</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
+      <div className="surface-card overflow-hidden">
+        {/* Table from lg up; the same deliveries as cards below that. */}
+        <div className="hidden overflow-x-auto lg:block">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                  Loading deliveries…
-                </TableCell>
+                <TableHead>Date</TableHead>
+                <TableHead>Shop</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Sales</TableHead>
+                <TableHead className="text-right">Labelling</TableHead>
+                <TableHead className="text-right">Jar & can</TableHead>
+                <TableHead className="text-right">Production</TableHead>
+                <TableHead className="text-right">Profit</TableHead>
               </TableRow>
-            )}
-            {!isLoading && deliveries.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
-                  No deliveries in {monthLabel(month)}.
-                </TableCell>
-              </TableRow>
-            )}
-            {deliveries.map((d) => (
-              <TableRow key={d.id}>
-                <TableCell>{dateLabel(d.delivery_date)}</TableCell>
-                <TableCell className="font-medium">{d.shops?.shop_name ?? "—"}</TableCell>
-                <TableCell>
-                  <Badge variant={d.status === "Delivered" ? "default" : "secondary"}>
-                    {d.status ?? "—"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="num text-right">{num(d.total_qty)}</TableCell>
-                <TableCell className="num text-right">{inr(d.total_sales)}</TableCell>
-                <TableCell className="num text-right">{inr(d.labelling_cost)}</TableCell>
-                <TableCell className="num text-right">{inr(d.packaging_cost)}</TableCell>
-                <TableCell className="num text-right">{inr(d.production_cost)}</TableCell>
-                <TableCell
-                  className={`num text-right font-semibold ${Number(d.profit) >= 0 ? "text-success" : "text-destructive"}`}
+            </TableHeader>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                    Loading deliveries…
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && deliveries.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
+                    {emptyMessage}
+                  </TableCell>
+                </TableRow>
+              )}
+              {pagination.pageRows.map((d) => (
+                <TableRow key={d.id}>
+                  <TableCell>{dateLabel(d.delivery_date)}</TableCell>
+                  <TableCell className="font-medium">{d.shops?.shop_name ?? "—"}</TableCell>
+                  <TableCell>
+                    <Badge variant={d.status === "Delivered" ? "default" : "secondary"}>
+                      {d.status ?? "—"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="num text-right">{num(d.total_qty)}</TableCell>
+                  <TableCell className="num text-right">{inr(d.total_sales)}</TableCell>
+                  <TableCell className="num text-right">{inr(d.labelling_cost)}</TableCell>
+                  <TableCell className="num text-right">{inr(d.packaging_cost)}</TableCell>
+                  <TableCell className="num text-right">{inr(d.production_cost)}</TableCell>
+                  <TableCell
+                    className={`num text-right font-semibold ${Number(d.profit) >= 0 ? "text-success" : "text-destructive"}`}
+                  >
+                    {inr(d.profit)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <RecordCards className="lg:hidden">
+          {isLoading && (
+            <p className="p-6 text-center text-muted-foreground">Loading deliveries…</p>
+          )}
+          {!isLoading && deliveries.length === 0 && (
+            <p className="p-6 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+          )}
+          {pagination.pageRows.map((d) => (
+            <RecordCard
+              key={d.id}
+              title={d.shops?.shop_name ?? "—"}
+              subtitle={dateLabel(d.delivery_date)}
+              badge={
+                <Badge variant={d.status === "Delivered" ? "default" : "secondary"}>
+                  {d.status ?? "—"}
+                </Badge>
+              }
+            >
+              <RecordField label="Quantity">
+                <span className="num">{num(d.total_qty)} units</span>
+              </RecordField>
+              <RecordField label="Sales">
+                <span className="num font-semibold">{inr(d.total_sales)}</span>
+              </RecordField>
+              <RecordField label="Fixed cost">
+                <span className="num">{inr(d.total_fixed_cost)}</span>
+              </RecordField>
+              <RecordField label="Profit">
+                <span
+                  className={`num font-semibold ${
+                    Number(d.profit) >= 0 ? "text-success" : "text-destructive"
+                  }`}
                 >
                   {inr(d.profit)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                </span>
+              </RecordField>
+            </RecordCard>
+          ))}
+        </RecordCards>
+
+        <DataPagination pagination={pagination} noun="deliveries" />
       </div>
     </>
   );

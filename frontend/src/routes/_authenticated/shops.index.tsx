@@ -19,8 +19,10 @@ import {
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { DataPagination, usePagination } from "@/components/data-pagination";
 import { LocationPicker } from "@/components/location-picker";
 import { ProductMultiSelect, ProductChips } from "@/components/product-multi-select";
+import { RecordCard, RecordCards, RecordField } from "@/components/record-card";
 import { ShopAreaFilter } from "@/components/filter-bar";
 import { ShopAreaSelect } from "@/components/shop-area-select";
 import { ShopAreasDialog } from "@/components/shop-areas-dialog";
@@ -96,8 +98,6 @@ const LEGACY_HANDLER = "__legacy__";
 
 /** Sentinel for "shops with nobody assigned" in the Handled by column filter. */
 const UNASSIGNED = "__unassigned__";
-
-const PAGE_SIZES = [10, 25, 50, 100];
 
 /** The shop columns that can be sorted on — `design_type` is the only numeric one. */
 type SortKey = "shop_name" | "handled_by" | "joined_on" | "mobile" | "design_type";
@@ -205,8 +205,6 @@ function ShopsPage() {
   const [handlerFilter, setHandlerFilter] = useState("all");
   const [designFilter, setDesignFilter] = useState("all");
   const [sort, setSort] = useState<SortState>({ key: "shop_name", dir: "asc" });
-  const [pageSize, setPageSize] = useState(25);
-  const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Shop | null>(null);
   const [form, setForm] = useState({ ...emptyShop });
@@ -282,15 +280,9 @@ function ShopsPage() {
     });
   }, [filtered, sort]);
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const firstRow = (currentPage - 1) * pageSize;
-  const pageRows = sorted.slice(firstRow, firstRow + pageSize);
-
-  // Narrowing the list can leave the current page past the end of it.
-  useEffect(() => {
-    setPage(1);
-  }, [search, areaFilter, handlerFilter, designFilter, pageSize]);
+  const pagination = usePagination(sorted, {
+    resetKey: `${search}-${areaFilter}-${handlerFilter}-${designFilter}`,
+  });
 
   const toggleSort = (key: SortKey) =>
     setSort((s) =>
@@ -701,21 +693,23 @@ function ShopsPage() {
       </AlertDialog>
 
       <div className="surface-card overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-          <Search className="size-4 shrink-0 text-muted-foreground" />
-          <Input
-            placeholder="Search shops, area, handler, mobile…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="min-w-40 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
-          />
+        <div className="grid grid-cols-2 items-center gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
+          <div className="col-span-2 flex min-w-0 items-center gap-2 sm:flex-1">
+            <Search className="size-4 shrink-0 text-muted-foreground" />
+            <Input
+              placeholder="Search shops, area, handler, mobile…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
+            />
+          </div>
           <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
           {/* Only people who can currently be assigned are offered — the
               same active, shop-handling users the form's picker lists. A shop
               still shows the stored name of a handler who has since left, but
               filtering by them is not something you can do any more. */}
           <Select value={handlerFilter} onValueChange={setHandlerFilter}>
-            <SelectTrigger className="w-[190px] max-w-full bg-card">
+            <SelectTrigger className="w-full bg-card sm:w-[190px]">
               <SelectValue placeholder="All handlers" />
             </SelectTrigger>
             <SelectContent>
@@ -729,7 +723,7 @@ function ShopsPage() {
             </SelectContent>
           </Select>
           <Select value={designFilter} onValueChange={setDesignFilter}>
-            <SelectTrigger className="w-[150px] max-w-full bg-card">
+            <SelectTrigger className="w-full bg-card sm:w-[150px]">
               <SelectValue placeholder="All designs" />
             </SelectTrigger>
             <SelectContent>
@@ -748,7 +742,8 @@ function ShopsPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="overflow-x-auto">
+        {/* Table from lg up; the same shops as cards below that. */}
+        <div className="hidden overflow-x-auto lg:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -800,10 +795,10 @@ function ShopsPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {pageRows.map((shop, i) => (
+              {pagination.pageRows.map((shop, i) => (
                 <TableRow key={shop.id}>
                   <TableCell className="num text-right text-muted-foreground">
-                    {firstRow + i + 1}
+                    {pagination.firstRow + i}
                   </TableCell>
                   <TableCell>
                     <Link
@@ -856,16 +851,70 @@ function ShopsPage() {
             </TableBody>
           </Table>
         </div>
-        <TablePagination
-          total={sorted.length}
-          firstRow={firstRow}
-          shown={pageRows.length}
-          page={currentPage}
-          totalPages={totalPages}
-          pageSize={pageSize}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
-        />
+
+        <RecordCards className="lg:hidden">
+          {isLoading && <p className="p-6 text-center text-muted-foreground">Loading shops…</p>}
+          {!isLoading && sorted.length === 0 && (
+            <div className="p-10 text-center">
+              <Store className="mx-auto size-8 text-muted-foreground/60" />
+              <p className="mt-3 text-sm text-muted-foreground">
+                No shops yet — add one, or import your workbook.
+              </p>
+            </div>
+          )}
+          {pagination.pageRows.map((shop) => (
+            <RecordCard
+              key={shop.id}
+              title={
+                <Link
+                  to="/shops/$shopId"
+                  params={{ shopId: shop.id }}
+                  className="hover:text-primary"
+                >
+                  {shop.shop_name}
+                </Link>
+              }
+              subtitle={shop.label_name ?? undefined}
+              badge={
+                <span className="num inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{ backgroundColor: designTypeColor(shop.design_type) }}
+                  />
+                  Design {shop.design_type}
+                </span>
+              }
+              actions={
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setDetailsShop(shop)}>
+                    View details
+                  </Button>
+                  {shop.latitude != null && shop.longitude != null && (
+                    <Button variant="ghost" size="sm" asChild>
+                      <a
+                        href={googleMapsDirectionsUrl(shop.latitude, shop.longitude)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <MapPin className="size-4" /> Directions
+                      </a>
+                    </Button>
+                  )}
+                </>
+              }
+            >
+              <RecordField label="Handled by">{shop.handled_by ?? "—"}</RecordField>
+              <RecordField label="Mobile">
+                <span className="num">{shop.mobile || "—"}</span>
+              </RecordField>
+              <RecordField label="Joined">
+                <span className="num">{dateLabel(shop.joined_on)}</span>
+              </RecordField>
+            </RecordCard>
+          ))}
+        </RecordCards>
+
+        <DataPagination pagination={pagination} noun="shops" />
       </div>
     </>
   );
@@ -896,99 +945,6 @@ function SortableHead({
         <Icon className={cn("size-3.5", active ? "opacity-100" : "opacity-40")} />
       </button>
     </TableHead>
-  );
-}
-
-/** Shops-per-page picker and page stepper, shown under the shop table. */
-function TablePagination({
-  total,
-  firstRow,
-  shown,
-  page,
-  totalPages,
-  pageSize,
-  onPageChange,
-  onPageSizeChange,
-}: {
-  total: number;
-  firstRow: number;
-  shown: number;
-  page: number;
-  totalPages: number;
-  pageSize: number;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (size: number) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-3">
-      <p className="text-xs text-muted-foreground">
-        {total === 0
-          ? "No shops to show"
-          : `Showing ${firstRow + 1}–${firstRow + shown} of ${total} shops`}
-      </p>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Shops per page</span>
-          <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-            <SelectTrigger className="h-8 w-[76px] bg-card">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PAGE_SIZES.map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            aria-label="First page"
-            disabled={page <= 1}
-            onClick={() => onPageChange(1)}
-          >
-            <ChevronsLeft className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            aria-label="Previous page"
-            disabled={page <= 1}
-            onClick={() => onPageChange(page - 1)}
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <span className="num px-2 text-xs text-muted-foreground">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            aria-label="Next page"
-            disabled={page >= totalPages}
-            onClick={() => onPageChange(page + 1)}
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            aria-label="Last page"
-            disabled={page >= totalPages}
-            onClick={() => onPageChange(totalPages)}
-          >
-            <ChevronsRight className="size-4" />
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
 

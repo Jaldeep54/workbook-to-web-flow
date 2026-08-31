@@ -17,7 +17,29 @@ const TERMS_BG = "#F2F4FF";
 const COMPANY_NAME = "Giniya Enterprise";
 const COMPANY_PHONE = "8849660980";
 
-const TERMS_LINE_1 = "Previous order dues must be cleared before the next order.";
+/**
+ * The terms printed on both halves of every bill, as supplied by the company.
+ * Each is a short bold heading and the sentence that follows it, so a
+ * shopkeeper scanning the box can find the clause that concerns them.
+ */
+const TERMS: Array<{ heading: string; text: string }> = [
+  {
+    heading: "Payment",
+    text: "Repeated/Active Parties must clear their outstanding bill within the payment date specified by the Company.",
+  },
+  {
+    heading: "45-Day Reorder",
+    text: "If a party does not place a repeat order within 45 days from the date of the last order, all outstanding dues for products already sold shall become payable immediately.",
+  },
+  {
+    heading: "Unsold Stock",
+    text: "In such a case, the Company may take back the remaining unsold stock in saleable condition, subject to stock verification.",
+  },
+  {
+    heading: "Onboarding Cancellation",
+    text: "The Company reserves the right to cancel/terminate the party's onboarding/business association in case of non-payment or failure to reorder within 45 days.",
+  },
+];
 
 const COL = {
   sno: "8%",
@@ -169,7 +191,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   amountWordsBlock: {
-    marginTop: 8,
+    marginTop: 6,
   },
   amountWordsValue: {
     fontSize: 8,
@@ -181,7 +203,7 @@ const styles = StyleSheet.create({
   },
   signatureBlock: {
     alignItems: "flex-end",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   signatureLine: {
     width: "45mm",
@@ -193,26 +215,37 @@ const styles = StyleSheet.create({
     fontSize: 7.5,
     color: DARK_TEXT,
   },
+  /**
+   * Four clauses have to sit in the strip left under the signature on a
+   * 148.5mm half, so the type here is deliberately smaller and tighter than
+   * anywhere else on the bill. Enlarging any of it pushes the last clause
+   * through the card's border — the layout has roughly a line to spare.
+   */
   termsBox: {
-    flexDirection: "row",
     backgroundColor: TERMS_BG,
     borderRadius: 5,
-    padding: "6pt",
+    padding: "5pt",
   },
   termsLabel: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 7.5,
+    fontSize: 7,
     color: NAVY,
-    width: "78pt",
-    marginRight: 6,
+    marginBottom: 2,
   },
-  termsTextBlock: {
-    flex: 1,
+  termsRow: {
+    flexDirection: "row",
+    marginBottom: 1,
+  },
+  termsNumber: {
+    fontSize: 6.5,
+    color: DARK_TEXT,
+    width: "8pt",
   },
   termsText: {
-    fontSize: 7.5,
+    flex: 1,
+    fontSize: 6.5,
     color: DARK_TEXT,
-    lineHeight: 1.4,
+    lineHeight: 1.25,
   },
   termsBold: {
     fontFamily: "Helvetica-Bold",
@@ -249,7 +282,9 @@ function BillDetails({ bill }: { bill: BillData }) {
       </View>
       <View>
         <Text style={[styles.label, { textAlign: "right" }]}>Invoice Details</Text>
-        <Text style={styles.invoiceDetailText}>Invoice No: {formatInvoiceNo(bill.invoiceNo)}</Text>
+        <Text style={styles.invoiceDetailText}>
+          Invoice No: {formatInvoiceNo(bill.invoiceNo, bill.shopCode)}
+        </Text>
         <Text style={styles.invoiceDetailText}>Date: {bill.deliveryDateLabel}</Text>
       </View>
     </View>
@@ -293,14 +328,15 @@ function BillTable({ bill }: { bill: BillData }) {
 function TermsBox() {
   return (
     <View style={styles.termsBox}>
-      <Text style={styles.termsLabel}>Terms and Condition:</Text>
-      <View style={styles.termsTextBlock}>
-        <Text style={styles.termsText}>{TERMS_LINE_1}</Text>
-        <Text style={styles.termsText}>
-          If no further order is placed, payment must be cleared within{" "}
-          <Text style={styles.termsBold}>45 days</Text> from the delivery date.
-        </Text>
-      </View>
+      <Text style={styles.termsLabel}>Terms &amp; Conditions</Text>
+      {TERMS.map((term, i) => (
+        <View key={term.heading} style={styles.termsRow} wrap={false}>
+          <Text style={styles.termsNumber}>{i + 1}.</Text>
+          <Text style={styles.termsText}>
+            <Text style={styles.termsBold}>{term.heading}:</Text> {term.text}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }

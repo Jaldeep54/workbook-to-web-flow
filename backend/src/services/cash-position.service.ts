@@ -24,10 +24,11 @@ export type CashPositionSummary = {
 async function total(
   model: typeof Investment | typeof Payout | typeof VariableCost | typeof Payment,
   filter: Record<string, unknown> = {},
+  field: "amount" | "amount_received" = "amount",
 ): Promise<number> {
   const [row] = await (model as typeof Investment).aggregate<{ total: number }>([
     { $match: filter },
-    { $group: { _id: null, total: { $sum: "$amount" } } },
+    { $group: { _id: null, total: { $sum: `$${field}` } } },
   ]);
   return round2(row?.total ?? 0);
 }
@@ -38,7 +39,9 @@ export async function cashPositionSummary(): Promise<CashPositionSummary> {
       total(Investment),
       total(Investment, { done_by: "Bhavin" }),
       total(Investment, { done_by: "Jaldeep" }),
-      total(Payment, { status: "Received" }),
+      // Every rupee actually collected, including instalments against bills
+      // that are still only part paid.
+      total(Payment, {}, "amount_received"),
       total(VariableCost),
       total(Payout),
     ]);

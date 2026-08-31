@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 
 import { LabelProduct, Product } from "../models/catalogue.model.js";
 import { VariableCost } from "../models/finance.model.js";
-import { LabelOrder, Order, Payment } from "../models/order.model.js";
+import { LabelOrder, Order, Payment, derivePaymentStatus } from "../models/order.model.js";
 import { Shop } from "../models/shop.model.js";
 import { monthKey, round2, toIsoDate } from "../utils/date.js";
 import { setOrderDelivered } from "./order.service.js";
@@ -232,6 +232,14 @@ export async function importWorkbook(buffer: Buffer): Promise<ImportResult> {
     if (!shop_id || !order_id || !payment_date) continue;
 
     try {
+      const amount = number(pick(row, ["Amount", "Payment", "Paid"]));
+      // The workbook records a status, not a running received figure, so a
+      // "Received" row means the whole amount arrived and anything else means
+      // none of it has. `status` is then derived from those two, as everywhere.
+      const sheetStatus = text(pick(row, ["Status"])) || "Received";
+      const amount_received = number(pick(row, ["Amount Received", "Received"])) ||
+        (sheetStatus === "Received" ? amount : 0);
+
       await Payment.updateOne(
         { order_id },
         {
@@ -239,9 +247,10 @@ export async function importWorkbook(buffer: Buffer): Promise<ImportResult> {
             shop_id,
             payment_date,
             month: monthKey(payment_date),
-            status: text(pick(row, ["Status"])) || "Received",
+            status: derivePaymentStatus(amount, amount_received),
             collected_by: text(pick(row, ["Collected By", "Received By"])) || null,
-            amount: number(pick(row, ["Amount", "Payment", "Paid"])),
+            amount,
+            amount_received,
           },
           $setOnInsert: { order_id },
         },

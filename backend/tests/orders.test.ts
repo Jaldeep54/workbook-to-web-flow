@@ -215,15 +215,134 @@ describe("Orders, deliveries and payments", () => {
     expect(dueDates.body.data).toContain("2026-08-05");
   });
 
-  it("generates stable invoice numbers for bills", async () => {
+  it("bills an order under its own order number, scoped by the shop's code", async () => {
     const order = (await admin.get("/orders?month=2026-08-01")).body.data[0];
     const first = await admin.post("/bills").send({ orderIds: [order.id] });
     expect(first.status).toBe(200);
-    expect(first.body.data[0].invoiceNo).toBeGreaterThan(0);
+    // The number on the bill is the number on the Orders screen — not a
+    // separate sequence the shopkeeper can't cross-check.
+    expect(first.body.data[0].invoiceNo).toBe(order.order_no);
+    expect(first.body.data[0].shopCode).toBe("1");
     expect(first.body.data[0].shopName).toBe("Order Test Shop");
 
     const second = await admin.post("/bills").send({ orderIds: [order.id] });
     expect(second.body.data[0].invoiceNo).toBe(first.body.data[0].invoiceNo);
+  });
+
+  it("tracks a part payment as a balance, and green-lights it once settled", async () => {
+    const order = await createOrder(10, "2026-08-14");
+    const orderId = order.body.data.id;
+    await admin.patch(`/orders/${orderId}/status`).send({ status: "Delivered" });
+
+    const payments = await admin.get("/payments?month=2026-08-01");
+    const payment = payments.body.data.find((p: { order_id: string }) => p.order_id === orderId);
+    expect(payment.status).toBe("Pending");
+    expect(payment.amount_received).toBe(0);
+    expect(payment.balance).toBeCloseTo(payment.amount, 2);
+
+    const part = await admin
+      .patch(`/payments/${payment.id}`)
+      .send({ amount_received: Math.round(payment.amount / 4) });
+    expect(part.body.data.status).toBe("Partial");
+    expect(part.body.data.balance).toBeCloseTo(payment.amount - Math.round(payment.amount / 4), 2);
+
+    const settled = await admin
+      .patch(`/payments/${payment.id}`)
+      .send({ amount_received: payment.amount });
+    expect(settled.body.data.status).toBe("Received");
+    expect(settled.body.data.balance).toBe(0);
+
+    // A bare status is shorthand for the money: Pending withdraws the lot.
+    const cleared = await admin.patch(`/payments/${payment.id}`).send({ status: "Pending" });
+    expect(cleared.body.data.amount_received).toBe(0);
+    expect(cleared.body.data.balance).toBeCloseTo(payment.amount, 2);
+  });
+
+  it("refuses a payment larger than the order is worth", async () => {
+    const payments = await admin.get("/payments?month=2026-08-01");
+    const payment = payments.body.data[0];
+    expectError(
+      await admin.patch(`/payments/${payment.id}`).send({ amount_received: payment.amount + 1 }),
+      400,
+    );
+  });
+
+  it("filters payments by status and searches them by shop", async () => {
+    const partial = await admin.get("/payments?month=2026-08-01&status=Pending");
+    expect(partial.body.data.every((p: { status: string }) => p.status === "Pending")).toBe(true);
+
+    const hit = await admin.get("/payments?month=2026-08-01&search=Order Test");
+    expect(hit.body.data.length).toBeGreaterThan(0);
+    expect((await admin.get("/payments?month=2026-08-01&search=nothing-like-this")).body.data)
+      .toHaveLength(0);
+  });
+
+  it("backfills payments written before amount_received existed", async () => {
+    const { default: mongoose } = await import("mongoose");
+    const { backfillPaymentAmountReceived } = await import("../src/seeds/backfill.seed.js");
+    const raw = mongoose.connection.collection("payments");
+
+    // Rows exactly as the old schema wrote them: a status, no received figure.
+    await raw.insertMany([
+      {
+        _id: "legacy-settled",
+        shop_id: shopId,
+        order_id: "legacy-order-1",
+        payment_date: "2026-08-20",
+        month: "2026-08-01",
+        status: "Received",
+        amount: 1200,
+      },
+      {
+        _id: "legacy-partial",
+        shop_id: shopId,
+        order_id: "legacy-order-2",
+        payment_date: "2026-08-21",
+        month: "2026-08-01",
+        status: "Partial",
+        amount: 800,
+      },
+    ] as never);
+
+    expect(await backfillPaymentAmountReceived()).toBe(2);
+
+    const settled = await admin.get("/payments/legacy-settled");
+    expect(settled.body.data.amount_received).toBe(1200);
+    expect(settled.body.data.balance).toBe(0);
+    expect(settled.body.data.status).toBe("Received");
+
+    // "Partial" could not say how much had come in, so there is no instalment
+    // to preserve — the row starts from nothing collected.
+    const partial = await admin.get("/payments/legacy-partial");
+    expect(partial.body.data.amount_received).toBe(0);
+    expect(partial.body.data.balance).toBe(800);
+    expect(partial.body.data.status).toBe("Pending");
+
+    // Idempotent: a second run has nothing left to repair.
+    expect(await backfillPaymentAmountReceived()).toBe(0);
+  });
+
+  it("lists the people a payment can be collected by", async () => {
+    const collectors = await admin.get("/payments/collectors");
+    expect(collectors.status).toBe(200);
+    expect(collectors.body.data.length).toBeGreaterThan(0);
+    expect(collectors.body.data[0]).toHaveProperty("full_name");
+  });
+
+  it("keeps a part payment when the order leaves Delivered", async () => {
+    const order = await createOrder(4, "2026-08-15");
+    const orderId = order.body.data.id;
+    await admin.patch(`/orders/${orderId}/status`).send({ status: "Delivered" });
+
+    const payments = await admin.get("/payments?month=2026-08-01");
+    const payment = payments.body.data.find((p: { order_id: string }) => p.order_id === orderId);
+    await admin.patch(`/payments/${payment.id}`).send({ amount_received: 100 });
+
+    await admin.patch(`/orders/${orderId}/status`).send({ status: "Cancelled" });
+
+    const after = await admin.get(`/payments/${payment.id}`);
+    expect(after.status).toBe(200);
+    expect(after.body.data.amount_received).toBe(100);
   });
 
   it("deletes an order together with its delivery and payment", async () => {

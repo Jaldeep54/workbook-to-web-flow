@@ -95,7 +95,13 @@ function Overview() {
 
   const s = summary.data;
   const profit = (s?.totalSales ?? 0) - (s?.totalFixedCost ?? 0) - (s?.variableCost ?? 0);
-  const due = (s?.totalSales ?? 0) - (s?.paymentsReceived ?? 0);
+  /**
+   * What the shops still owe: the sum of every payment's own balance, straight
+   * from the API. Derived here from sales minus collections before shops could
+   * pay in instalments, which double-counted a month whose deliveries and
+   * collections fell either side of its edge.
+   */
+  const due = s?.paymentsPending ?? 0;
   const areaName =
     areaFilter === "all" ? "All Areas" : (areas.data?.find((a) => a.id === areaFilter)?.name ?? "");
 
@@ -123,7 +129,7 @@ function Overview() {
         "Delivered qty": s.deliveryQty,
         Sales: s.totalSales,
         "Payments received": s.paymentsReceived,
-        "Payment due": due,
+        "Balance pending": due,
         "Total fixed cost": s.totalFixedCost,
         "Variable cost": s.variableCost,
         Profit: profit,
@@ -157,13 +163,13 @@ function Overview() {
       />
 
       {summary.isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Total sales"
             value={inr(s?.totalSales)}
@@ -180,12 +186,13 @@ function Overview() {
           <StatCard
             label="Payments received"
             value={inr(s?.paymentsReceived)}
-            sub={`${num(s?.paymentCount)} payments`}
+            sub={`${num(s?.paymentCount)} bills part or fully paid`}
             icon={CreditCard}
           />
           <StatCard
-            label="Payment due"
+            label="Balance pending"
             value={inr(due)}
+            sub="Still to collect from shops"
             icon={IndianRupee}
             tone={due > 0 ? "negative" : "positive"}
           />

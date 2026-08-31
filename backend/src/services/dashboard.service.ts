@@ -144,6 +144,28 @@ async function productRevenueMix(filter: Record<string, unknown>) {
   }));
 }
 
+/**
+ * What is still owed across a set of payments: Σ (amount − amount received),
+ * floored at zero per row so an overpayment on one order can never mask a
+ * genuine debt on another.
+ */
+async function outstandingTotal(filter: Record<string, unknown>): Promise<number> {
+  const [row] = await Payment.aggregate<{ total: number }>([
+    { $match: filter },
+    {
+      $group: {
+        _id: null,
+        total: {
+          $sum: {
+            $max: [0, { $subtract: ["$amount", { $ifNull: ["$amount_received", 0] }] }],
+          },
+        },
+      },
+    },
+  ]);
+  return round2(row?.total ?? 0);
+}
+
 export async function dashboardSummary(
   month: string,
   areaId: string | null = null,
@@ -182,9 +204,12 @@ export async function dashboardSummary(
     qtyByProductKey(Delivery, monthFilter, "delivery_lines"),
     sumField(Delivery, monthFilter, "total_sales"),
     sumField(Delivery, monthFilter, "total_fixed_cost"),
-    Payment.countDocuments(scoped({ month, status: "Received", amount: { $gt: 0 } }, shopIds)),
-    sumField(Payment, scoped({ month, status: "Received" }, shopIds), "amount"),
-    sumField(Payment, scoped({ month, status: { $ne: "Received" } }, shopIds), "amount"),
+    // Money, not statuses: a part payment is cash in hand for what arrived and
+    // outstanding for the rest, so both figures are sums over every payment
+    // rather than over the rows carrying a particular status.
+    Payment.countDocuments(scoped({ month, amount_received: { $gt: 0 } }, shopIds)),
+    sumField(Payment, monthFilter, "amount_received"),
+    outstandingTotal(scoped({ month }, shopIds)),
     sumField(VariableCost, { month }, "amount"),
     LabelOrder.countDocuments(scoped({ month, total_labels: { $gt: 0 } }, shopIds)),
     labelsByProductKey(monthFilter),

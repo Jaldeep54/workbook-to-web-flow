@@ -56,11 +56,27 @@ export const deliveriesQuery = (month: string, shopId: string | "all") =>
     queryFn: () => deliveriesApi.list({ month, shopId: shopId === "all" ? undefined : shopId }),
   });
 
-export const paymentsQuery = (month: string, shopId: string | "all") =>
+export const paymentsQuery = (
+  month: string,
+  shopId: string | "all",
+  status: string | "all" = "all",
+) =>
   queryOptions({
-    queryKey: ["payments", month, shopId],
-    queryFn: () => paymentsApi.list({ month, shopId: shopId === "all" ? undefined : shopId }),
+    queryKey: ["payments", month, shopId, status],
+    queryFn: () =>
+      paymentsApi.list({
+        month,
+        shopId: shopId === "all" ? undefined : shopId,
+        status: status === "all" ? undefined : status,
+      }),
   });
+
+/** The people a collection can be credited to — active user accounts. */
+export const paymentCollectorsQuery = queryOptions({
+  queryKey: ["payment_collectors"],
+  staleTime: 60 * 1000,
+  queryFn: () => paymentsApi.collectors(),
+});
 
 export const labelOrdersQuery = (month: string, shopId: string | "all") =>
   queryOptions({
@@ -79,5 +95,6 @@ export type {
   DeliveryRecord,
   LabelOrderRecord,
   OrderRecord,
+  PaymentCollector,
   PaymentRecord,
 } from "@/services/klinzo.service";

@@ -140,11 +140,35 @@ export interface IPayment {
   month: string | null;
   status: PaymentStatus;
   collected_by: string | null;
+  /** The user account behind `collected_by`, when the collector has one. */
+  collected_by_user_id: string | null;
   /** When the money actually arrived, distinct from payment_date. */
   collected_date: string | null;
+  /** What the delivery is worth — the full bill for this order. */
   amount: number;
+  /**
+   * How much of `amount` the shopkeeper has actually handed over. Shops pay in
+   * instalments, so this is the running total of what has come in and
+   * `amount - amount_received` is the balance still owed. `status` is always
+   * derived from the two by `derivePaymentStatus()` — never set on its own.
+   */
+  amount_received: number;
   created_at?: Date;
   updated_at?: Date;
+}
+
+/**
+ * A payment's status is a function of its two money figures, never an
+ * independent field: nothing received is Pending, part of it is Partial, all
+ * of it (or more) is Received. Every write path runs through here so a row can
+ * never claim "Received" while money is still outstanding.
+ */
+export function derivePaymentStatus(amount: number, amountReceived: number): PaymentStatus {
+  const due = Number(amount) || 0;
+  const paid = Number(amountReceived) || 0;
+  if (paid <= 0) return "Pending";
+  if (paid >= due) return "Received";
+  return "Partial";
 }
 
 const paymentSchema = new Schema<IPayment>(
@@ -156,8 +180,10 @@ const paymentSchema = new Schema<IPayment>(
     month: { type: String, default: null, match: ISO_DATE_MATCH },
     status: { type: String, enum: PAYMENT_STATUSES, default: "Pending" },
     collected_by: { type: String, default: null, maxlength: 80, trim: true },
+    collected_by_user_id: { type: String, ref: "User", default: null },
     collected_date: { type: String, default: null, match: ISO_DATE_MATCH },
     amount: { type: Number, default: 0, min: 0 },
+    amount_received: { type: Number, default: 0, min: 0 },
   },
   schemaOptions(),
 );
@@ -165,6 +191,13 @@ const paymentSchema = new Schema<IPayment>(
 paymentSchema.index({ month: 1, payment_date: -1 });
 paymentSchema.index({ shop_id: 1, payment_date: -1 });
 paymentSchema.index({ status: 1 });
+paymentSchema.index({ collected_by_user_id: 1 });
+
+/** Keeps `status` honest however a caller chose to write the two amounts. */
+paymentSchema.pre("validate", function syncStatus(next) {
+  this.status = derivePaymentStatus(this.amount, this.amount_received);
+  next();
+});
 
 paymentSchema.pre("validate", function assignMonth(next) {
   this.month = monthKey(this.payment_date);

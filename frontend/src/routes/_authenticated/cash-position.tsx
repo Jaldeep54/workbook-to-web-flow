@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { DataPagination, usePagination } from "@/components/data-pagination";
 import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { MonthPicker } from "@/components/month-picker";
 import { StatCard } from "@/components/stat-card";
@@ -152,6 +153,7 @@ function InvestmentsSection({
   const [deleting, setDeleting] = useState<InvestmentRow | null>(null);
 
   const filteredInvestments = investments.filter((row) => monthKey(row.investment_date) === month);
+  const pagination = usePagination(filteredInvestments, { resetKey: month });
 
   const invalidateAll = () => {
     for (const key of CASH_POSITION_INVALIDATE_KEYS) void qc.invalidateQueries({ queryKey: [key] });
@@ -245,45 +247,48 @@ function InvestmentsSection({
         </Dialog>
       </div>
 
-      <div className="surface-card overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Done by</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
+      <div className="surface-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
-                  Loading investments…
-                </TableCell>
+                <TableHead>Date</TableHead>
+                <TableHead>Done by</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="w-10" />
               </TableRow>
-            )}
-            {!isLoading && filteredInvestments.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
-                  No investments in {monthLabel(month)}.
-                </TableCell>
-              </TableRow>
-            )}
-            {filteredInvestments.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>{dateLabel(row.investment_date)}</TableCell>
-                <TableCell>{row.done_by}</TableCell>
-                <TableCell className="num text-right font-semibold">{inr(row.amount)}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => setDeleting(row)}>
-                    <Trash2 className="size-4 text-muted-foreground" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                    Loading investments…
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && filteredInvestments.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
+                    No investments in {monthLabel(month)}.
+                  </TableCell>
+                </TableRow>
+              )}
+              {pagination.pageRows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{dateLabel(row.investment_date)}</TableCell>
+                  <TableCell>{row.done_by}</TableCell>
+                  <TableCell className="num text-right font-semibold">{inr(row.amount)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => setDeleting(row)}>
+                      <Trash2 className="size-4 text-muted-foreground" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <DataPagination pagination={pagination} noun="investments" />
       </div>
 
       <Dialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
@@ -325,6 +330,7 @@ function PayoutsSection({ total }: { total: number }) {
   const [deleting, setDeleting] = useState<PayoutRow | null>(null);
 
   const filteredPayouts = payouts.filter((row) => monthKey(row.payout_date) === month);
+  const pagination = usePagination(filteredPayouts, { resetKey: month });
 
   const invalidateAll = () => {
     for (const key of CASH_POSITION_INVALIDATE_KEYS) void qc.invalidateQueries({ queryKey: [key] });
@@ -416,45 +422,48 @@ function PayoutsSection({ total }: { total: number }) {
         </Dialog>
       </div>
 
-      <div className="surface-card overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Done by</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
+      <div className="surface-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
-                  Loading payouts…
-                </TableCell>
+                <TableHead>Date</TableHead>
+                <TableHead>Done by</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="w-10" />
               </TableRow>
-            )}
-            {!isLoading && filteredPayouts.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
-                  No payouts in {monthLabel(month)}.
-                </TableCell>
-              </TableRow>
-            )}
-            {filteredPayouts.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>{dateLabel(row.payout_date)}</TableCell>
-                <TableCell>{row.done_by}</TableCell>
-                <TableCell className="num text-right font-semibold">{inr(row.amount)}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => setDeleting(row)}>
-                    <Trash2 className="size-4 text-muted-foreground" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                    Loading payouts…
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && filteredPayouts.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
+                    No payouts in {monthLabel(month)}.
+                  </TableCell>
+                </TableRow>
+              )}
+              {pagination.pageRows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{dateLabel(row.payout_date)}</TableCell>
+                  <TableCell>{row.done_by}</TableCell>
+                  <TableCell className="num text-right font-semibold">{inr(row.amount)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => setDeleting(row)}>
+                      <Trash2 className="size-4 text-muted-foreground" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <DataPagination pagination={pagination} noun="payouts" />
       </div>
 
       <Dialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>

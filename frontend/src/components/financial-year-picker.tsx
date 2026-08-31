@@ -68,7 +68,7 @@ export function FinancialYearPicker({
 
   return (
     <Select value={value} onValueChange={(fy) => onChange(fy, suggestMonth(fy))}>
-      <SelectTrigger className="w-[130px] max-w-full bg-card">
+      <SelectTrigger className="w-full bg-card sm:w-[130px]">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

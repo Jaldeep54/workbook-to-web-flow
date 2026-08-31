@@ -5,6 +5,7 @@ import { KeyRound, Plus, Search, Trash2, UserCog } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { DataPagination, usePagination } from "@/components/data-pagination";
 import { RequirePermission } from "@/components/require-permission";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -185,6 +186,7 @@ function UsersView() {
   };
 
   const rows = users.data?.data ?? [];
+  const pagination = usePagination(rows, { resetKey: search });
 
   return (
     <>
@@ -237,7 +239,7 @@ function UsersView() {
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map((user) => (
+              {pagination.pageRows.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
                     <p className="font-medium">{user.fullName}</p>
@@ -308,6 +310,7 @@ function UsersView() {
             </TableBody>
           </Table>
         </div>
+        <DataPagination pagination={pagination} noun="users" />
       </div>
 
       <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : setOpen(false))}>

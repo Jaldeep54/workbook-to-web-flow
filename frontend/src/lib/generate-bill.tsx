@@ -8,8 +8,8 @@ import { downloadBlob } from "./export";
  * Bill generation, split the way the rest of the app is:
  *
  *  - the **API** owns everything that must be authoritative — the invoice
- *    number (stable per order, allocated atomically), the prices, the shop's
- *    billing name and address;
+ *    number (the shop's own order number, see bill-data.ts), the prices, the
+ *    shop's billing name and address;
  *  - the **frontend** owns presentation — turning that payload into the
  *    A4 Invoice + Delivery Challan PDF and handing it to the browser.
  */
@@ -19,6 +19,7 @@ function toBillData(payload: BillPayload): BillData {
   return {
     orderId: payload.orderId,
     invoiceNo: payload.invoiceNo,
+    shopCode: payload.shopCode,
     deliveryDateRaw: payload.deliveryDateRaw,
     deliveryDateLabel: dateLabel(payload.deliveryDateRaw),
     shopName: payload.shopName,

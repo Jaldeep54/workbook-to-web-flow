@@ -22,12 +22,14 @@ export function StatCard({
   }[tone];
 
   return (
-    <div className="surface-card p-5">
+    <div className="surface-card p-4 sm:p-5">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
         {Icon && <Icon className="size-4 text-muted-foreground" />}
       </div>
-      <p className={cn("num mt-3 font-display text-2xl font-semibold", toneClass)}>{value}</p>
+      <p className={cn("num mt-3 font-display text-xl font-semibold sm:text-2xl", toneClass)}>
+        {value}
+      </p>
       {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );

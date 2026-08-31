@@ -173,6 +173,12 @@ export const deliveriesApi = {
 
 /* ---------------------------------------------------------------- payments */
 
+/**
+ * A shop settles its bill in instalments, so a payment carries both what the
+ * order is worth (`amount`) and what has actually come in (`amount_received`).
+ * `balance` is the difference — what the shopkeeper still owes — and `status`
+ * is derived from the two by the API, never chosen on its own.
+ */
 export type PaymentRecord = {
   id: string;
   shop_id: string;
@@ -180,18 +186,36 @@ export type PaymentRecord = {
   payment_date: string | null;
   status: string | null;
   collected_by: string | null;
+  collected_by_user_id: string | null;
   collected_date: string | null;
   amount: number;
+  amount_received: number;
+  balance: number;
   shops: ShopRef;
   orders: { order_no: number } | null;
 };
 
+/** A person a collection can be credited to — see `paymentsApi.collectors`. */
+export type PaymentCollector = {
+  id: string;
+  full_name: string;
+  role_name: string;
+};
+
 export const paymentsApi = {
-  list: (params: { month?: string; shopId?: string; areaId?: string }) =>
+  list: (params: { month?: string; shopId?: string; areaId?: string; status?: string }) =>
     api.get<PaymentRecord[]>("/payments", { ...params, limit: 500 }),
+  /** Active user accounts, for the "Collected by" picker. */
+  collectors: () => api.get<PaymentCollector[]>("/payments/collectors"),
   update: (
     id: string,
-    payload: { status?: string; collected_by?: string | null; collected_date?: string | null },
+    payload: {
+      status?: string;
+      collected_by?: string | null;
+      collected_by_user_id?: string | null;
+      collected_date?: string | null;
+      amount_received?: number;
+    },
   ) => api.patch<PaymentRecord>(`/payments/${id}`, payload),
 };
 
@@ -459,7 +483,9 @@ export type ShopHistory = {
     status: string | null;
     collected_by: string | null;
     collected_date: string | null;
+    /** What the order is worth; `amount_received` is what has come in so far. */
     amount: number;
+    amount_received: number;
   }>;
 };
 
@@ -475,7 +501,10 @@ export type BillLineItem = {
 
 export type BillPayload = {
   orderId: string;
+  /** The shop's own order number — the same figure the Orders table shows. */
   invoiceNo: number;
+  /** Scopes `invoiceNo`, which only runs sequentially within one shop. */
+  shopCode: string;
   deliveryDateRaw: string;
   shopName: string;
   shopAddress: string | null;

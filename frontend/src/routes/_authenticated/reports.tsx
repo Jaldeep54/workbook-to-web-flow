@@ -91,7 +91,7 @@ function ReportsPage() {
         actions={
           <>
             <Select value={range} onValueChange={setRange}>
-              <SelectTrigger className="w-[170px] bg-card">
+              <SelectTrigger className="w-full bg-card sm:w-[170px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

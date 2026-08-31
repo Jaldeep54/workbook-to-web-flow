@@ -38,7 +38,10 @@ export function HighlightedDatePicker({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" className={cn("justify-start bg-card font-normal", className)}>
+        <Button
+          variant="outline"
+          className={cn("w-full justify-start bg-card font-normal sm:w-auto", className)}
+        >
           <CalendarIcon className="size-4" />
           {value ? dateLabel(value) : placeholder}
         </Button>

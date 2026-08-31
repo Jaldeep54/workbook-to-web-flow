@@ -5,6 +5,7 @@ import { AlertTriangle, Download, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { DataPagination, usePagination } from "@/components/data-pagination";
 import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { MonthPicker } from "@/components/month-picker";
 import { ShopAreaFilter, ShopFilter } from "@/components/filter-bar";
@@ -140,9 +141,13 @@ function StockDashboard() {
     .filter((s) => (onlyLow ? s.low > 0 : true))
     .filter((s) => s.shopName.toLowerCase().includes(search.trim().toLowerCase()));
 
+  // The cards above and the CSV export read `filtered`, so both keep covering
+  // every shop the filters leave rather than the page on screen.
+  const pagination = usePagination(filtered, { resetKey: `${onlyLow}-${search}` });
+
   return (
     <>
-      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard label="Shops tracked" value={String(byShop.length)} />
         <StatCard
           label="Shops needing labels"
@@ -230,7 +235,7 @@ function StockDashboard() {
                   </TableCell>
                 </TableRow>
               )}
-              {filtered.map((s) => (
+              {pagination.pageRows.map((s) => (
                 <TableRow key={s.shopId}>
                   <TableCell className="font-medium">{s.shopName}</TableCell>
                   <TableCell className="num text-right">{s.designType}</TableCell>
@@ -258,6 +263,7 @@ function StockDashboard() {
             </TableBody>
           </Table>
         </div>
+        <DataPagination pagination={pagination} noun="shops" />
       </div>
     </>
   );
@@ -299,6 +305,10 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
   const orders = monthOrders
     .filter((o) => !dateFilter || o.order_date === dateFilter)
     .filter((o) => areaFilter === "all" || shopById.get(o.shop_id)?.area_id === areaFilter);
+
+  const pagination = usePagination(orders, {
+    resetKey: `${month}-${shopFilter}-${areaFilter}-${dateFilter}`,
+  });
 
   // Per-product sheet totals across every order currently shown (respecting
   // whatever month/date/shop filter is active) — not the "new order" draft.
@@ -389,7 +399,7 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
             type="date"
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
-            className="w-[150px] bg-card"
+            className="w-full bg-card sm:w-[150px]"
             aria-label="Filter to a single date"
           />
           {dateFilter && (
@@ -539,7 +549,7 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
         </Dialog>
       </div>
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {labelProducts.map((lp) => (
           <StatCard
             key={lp.id}
@@ -550,84 +560,87 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
         ))}
       </div>
 
-      <div className="surface-card overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Shop</TableHead>
-              <TableHead>Shop Area</TableHead>
-              <TableHead className="text-right">No.</TableHead>
-              {labelProducts.map((lp) => (
-                <TableHead key={lp.id} className="text-right">
-                  {lp.short_name}
-                </TableHead>
-              ))}
-              <TableHead className="text-right">Labels</TableHead>
-              <TableHead className="w-10"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
+      <div className="surface-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  colSpan={labelProducts.length + 6}
-                  className="py-10 text-center text-muted-foreground"
-                >
-                  Loading label orders…
-                </TableCell>
+                <TableHead>Date</TableHead>
+                <TableHead>Shop</TableHead>
+                <TableHead>Shop Area</TableHead>
+                <TableHead className="text-right">No.</TableHead>
+                {labelProducts.map((lp) => (
+                  <TableHead key={lp.id} className="text-right">
+                    {lp.short_name}
+                  </TableHead>
+                ))}
+                <TableHead className="text-right">Labels</TableHead>
+                <TableHead className="w-10"></TableHead>
               </TableRow>
-            )}
-            {!isLoading && orders.length === 0 && (
-              <TableRow>
-                <TableCell
-                  colSpan={labelProducts.length + 6}
-                  className="py-12 text-center text-muted-foreground"
-                >
-                  No label orders{" "}
-                  {dateFilter ? `on ${dateLabel(dateFilter)}` : `in ${monthLabel(month)}`}.
-                </TableCell>
-              </TableRow>
-            )}
-            {orders.map((o) => {
-              const shop = shopById.get(o.shop_id);
-              const { primary, secondary } = shopDisplay(shop);
-              return (
-                <TableRow key={o.id}>
-                  <TableCell>{dateLabel(o.order_date)}</TableCell>
-                  <TableCell className="font-medium">
-                    {primary}
-                    {secondary && <p className="text-xs text-muted-foreground">{secondary}</p>}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {areaName(shop?.area_id)}
-                  </TableCell>
-                  <TableCell className="num text-right">{o.order_no}</TableCell>
-                  {labelProducts.map((lp) => (
-                    <TableCell key={lp.id} className="num text-right">
-                      {sheetsFor(o, lp.id) || "—"}
-                    </TableCell>
-                  ))}
-                  <TableCell className="num text-right font-semibold">
-                    {num(o.total_labels)}
-                  </TableCell>
-                  <TableCell>
-                    <Can resource={RESOURCES.labelOrders} action="delete">
-                      <button
-                        type="button"
-                        onClick={() => setOrderToDelete(o)}
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label={`Delete order ${o.order_no}`}
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </Can>
+            </TableHeader>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell
+                    colSpan={labelProducts.length + 6}
+                    className="py-10 text-center text-muted-foreground"
+                  >
+                    Loading label orders…
                   </TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+              )}
+              {!isLoading && orders.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={labelProducts.length + 6}
+                    className="py-12 text-center text-muted-foreground"
+                  >
+                    No label orders{" "}
+                    {dateFilter ? `on ${dateLabel(dateFilter)}` : `in ${monthLabel(month)}`}.
+                  </TableCell>
+                </TableRow>
+              )}
+              {pagination.pageRows.map((o) => {
+                const shop = shopById.get(o.shop_id);
+                const { primary, secondary } = shopDisplay(shop);
+                return (
+                  <TableRow key={o.id}>
+                    <TableCell>{dateLabel(o.order_date)}</TableCell>
+                    <TableCell className="font-medium">
+                      {primary}
+                      {secondary && <p className="text-xs text-muted-foreground">{secondary}</p>}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {areaName(shop?.area_id)}
+                    </TableCell>
+                    <TableCell className="num text-right">{o.order_no}</TableCell>
+                    {labelProducts.map((lp) => (
+                      <TableCell key={lp.id} className="num text-right">
+                        {sheetsFor(o, lp.id) || "—"}
+                      </TableCell>
+                    ))}
+                    <TableCell className="num text-right font-semibold">
+                      {num(o.total_labels)}
+                    </TableCell>
+                    <TableCell>
+                      <Can resource={RESOURCES.labelOrders} action="delete">
+                        <button
+                          type="button"
+                          onClick={() => setOrderToDelete(o)}
+                          className="text-muted-foreground hover:text-destructive"
+                          aria-label={`Delete order ${o.order_no}`}
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </Can>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+        <DataPagination pagination={pagination} noun="label orders" />
       </div>
 
       <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>

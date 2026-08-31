@@ -5,11 +5,14 @@ import { Download, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
+import { DataPagination, usePagination } from "@/components/data-pagination";
 import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { HighlightedDatePicker } from "@/components/highlighted-date-picker";
 import { MonthPicker } from "@/components/month-picker";
 import { ShopAreaFilter, ShopFilter } from "@/components/filter-bar";
 import { NewOrderDialog } from "@/components/new-order-dialog";
+import { RecordCard, RecordCards, RecordField } from "@/components/record-card";
+import { SearchInput, matchesSearch } from "@/components/search-input";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +58,7 @@ function OrdersPage() {
   const [shopFilter, setShopFilter] = useState("all");
   const [areaFilter, setAreaFilter] = useState("all");
   const [exactDate, setExactDate] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<OrderRecord | null>(null);
   const [deleting, setDeleting] = useState<OrderRecord | null>(null);
@@ -87,9 +91,22 @@ function OrdersPage() {
   );
 
   const filteredOrders = useMemo(
-    () => ordersInArea.filter((o) => !exactDate || o.order_date === exactDate),
-    [ordersInArea, exactDate],
+    () =>
+      ordersInArea.filter(
+        (o) =>
+          (!exactDate || o.order_date === exactDate) &&
+          matchesSearch(search, o.shops?.shop_name, o.shops?.label_name, o.shops?.code, o.order_no),
+      ),
+    [ordersInArea, exactDate, search],
   );
+
+  // Paged for the table only. Everything else on this screen — the per-product
+  // totals, the grand total, the CSV export — deliberately reads
+  // `filteredOrders`, so they describe the whole filtered month rather than
+  // whichever page happens to be on screen.
+  const pagination = usePagination(filteredOrders, {
+    resetKey: `${month}-${shopFilter}-${areaFilter}-${exactDate}-${search}`,
+  });
 
   const productTotals = useMemo(() => {
     const totals = new Map<string, number>();
@@ -147,6 +164,11 @@ function OrdersPage() {
   const qtyFor = (order: OrderRecord, productId: string) =>
     order.order_lines.find((l) => l.product_id === productId)?.qty ?? 0;
 
+  const emptyMessage =
+    orders.length === 0
+      ? `No orders in ${monthLabel(month)}.`
+      : "No orders match the current filters.";
+
   const grandTotal = useMemo(
     () => productTotals.reduce((a, r) => a + Number(r.total_qty), 0),
     [productTotals],
@@ -156,7 +178,7 @@ function OrdersPage() {
     <>
       <PageHeader
         title="Orders"
-        description={`${filteredOrders.length} orders in ${monthLabel(month)}${exactDate ? ` on ${dateLabel(exactDate)}` : ""}`}
+        description={`${num(filteredOrders.length)} orders in ${monthLabel(month)}${exactDate ? ` on ${dateLabel(exactDate)}` : ""}${search ? ` matching “${search}”` : ""}`}
         actions={
           <>
             <FinancialYearPicker
@@ -187,8 +209,14 @@ function OrdersPage() {
               onChange={setShopFilter}
               areaId={areaFilter !== "all" ? areaFilter : undefined}
             />
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search shop or order no…"
+            />
             <Button
               variant="outline"
+              className="col-span-2 sm:col-span-1"
               onClick={() =>
                 downloadCsv(
                   `klinzo-orders-${month}`,
@@ -209,7 +237,7 @@ function OrdersPage() {
               <Download className="size-4" /> Export
             </Button>
             <Can resource={RESOURCES.orders} action="create">
-              <Button onClick={openCreate}>
+              <Button onClick={openCreate} className="w-full sm:w-auto">
                 <Plus className="size-4" /> New order
               </Button>
             </Can>
@@ -228,7 +256,7 @@ function OrdersPage() {
           </div>
           <p className="num text-sm text-muted-foreground">{num(grandTotal)} units in total</p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6">
           {productTotals.map((row) => (
             <StatCard
               key={row.product_id}
@@ -264,95 +292,167 @@ function OrdersPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="surface-card overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Order date</TableHead>
-              <TableHead>Delivery date</TableHead>
-              <TableHead>Shop</TableHead>
-              <TableHead className="text-right">No.</TableHead>
-              {products.map((p) => (
-                <TableHead key={p.id} className="text-right">
-                  {p.short_name}
-                </TableHead>
-              ))}
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
+      <div className="surface-card overflow-hidden">
+        {/* Table from lg up; the same orders as cards below that. A column
+            per product makes this the widest table in the app. */}
+        <div className="hidden overflow-x-auto lg:block">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  colSpan={products.length + 7}
-                  className="py-10 text-center text-muted-foreground"
-                >
-                  Loading orders…
-                </TableCell>
-              </TableRow>
-            )}
-            {!isLoading && filteredOrders.length === 0 && (
-              <TableRow>
-                <TableCell
-                  colSpan={products.length + 7}
-                  className="py-12 text-center text-muted-foreground"
-                >
-                  No orders match the current filters.
-                </TableCell>
-              </TableRow>
-            )}
-            {filteredOrders.map((o) => (
-              <TableRow key={o.id}>
-                <TableCell>{dateLabel(o.order_date)}</TableCell>
-                <TableCell>{dateLabel(o.delivery_date)}</TableCell>
-                <TableCell className="font-medium">
-                  {o.shops?.shop_name ?? "—"}
-                  {o.shops?.label_name && (
-                    <p className="text-xs text-muted-foreground">{o.shops.label_name}</p>
-                  )}
-                </TableCell>
-                <TableCell className="num text-right">{o.order_no}</TableCell>
+                <TableHead>Order date</TableHead>
+                <TableHead>Delivery date</TableHead>
+                <TableHead>Shop</TableHead>
+                <TableHead className="text-right">No.</TableHead>
                 {products.map((p) => (
-                  <TableCell key={p.id} className="num text-right">
-                    {qtyFor(o, p.id) || "—"}
-                  </TableCell>
+                  <TableHead key={p.id} className="text-right">
+                    {p.short_name}
+                  </TableHead>
                 ))}
-                <TableCell className="num text-right font-semibold">{num(o.total_qty)}</TableCell>
-                <TableCell>
-                  <Badge variant={o.status === "Delivered" ? "default" : "secondary"}>
-                    {o.status ?? "Pending"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    <Can resource={RESOURCES.orders} action="update">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEdit(o)}
-                        aria-label="Edit order"
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                    </Can>
-                    <Can resource={RESOURCES.orders} action="delete">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleting(o)}
-                        aria-label="Delete order"
-                      >
-                        <Trash2 className="size-4 text-destructive" />
-                      </Button>
-                    </Can>
-                  </div>
-                </TableCell>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell
+                    colSpan={products.length + 7}
+                    className="py-10 text-center text-muted-foreground"
+                  >
+                    Loading orders…
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && filteredOrders.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={products.length + 7}
+                    className="py-12 text-center text-muted-foreground"
+                  >
+                    {emptyMessage}
+                  </TableCell>
+                </TableRow>
+              )}
+              {pagination.pageRows.map((o) => (
+                <TableRow key={o.id}>
+                  <TableCell>{dateLabel(o.order_date)}</TableCell>
+                  <TableCell>{dateLabel(o.delivery_date)}</TableCell>
+                  <TableCell className="font-medium">
+                    {o.shops?.shop_name ?? "—"}
+                    {o.shops?.label_name && (
+                      <p className="text-xs text-muted-foreground">{o.shops.label_name}</p>
+                    )}
+                  </TableCell>
+                  <TableCell className="num text-right">{o.order_no}</TableCell>
+                  {products.map((p) => (
+                    <TableCell key={p.id} className="num text-right">
+                      {qtyFor(o, p.id) || "—"}
+                    </TableCell>
+                  ))}
+                  <TableCell className="num text-right font-semibold">{num(o.total_qty)}</TableCell>
+                  <TableCell>
+                    <Badge variant={o.status === "Delivered" ? "default" : "secondary"}>
+                      {o.status ?? "Pending"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Can resource={RESOURCES.orders} action="update">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEdit(o)}
+                          aria-label="Edit order"
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                      </Can>
+                      <Can resource={RESOURCES.orders} action="delete">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleting(o)}
+                          aria-label="Delete order"
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </Can>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <RecordCards className="lg:hidden">
+          {isLoading && <p className="p-6 text-center text-muted-foreground">Loading orders…</p>}
+          {!isLoading && filteredOrders.length === 0 && (
+            <p className="p-6 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+          )}
+          {pagination.pageRows.map((o) => (
+            <RecordCard
+              key={o.id}
+              title={o.shops?.shop_name ?? "—"}
+              subtitle={
+                <>
+                  {o.shops?.label_name && <span>{o.shops.label_name} · </span>}
+                  Order {o.order_no} · {dateLabel(o.order_date)}
+                </>
+              }
+              badge={
+                <Badge variant={o.status === "Delivered" ? "default" : "secondary"}>
+                  {o.status ?? "Pending"}
+                </Badge>
+              }
+              actions={
+                <>
+                  <Can resource={RESOURCES.orders} action="update">
+                    <Button variant="outline" size="sm" onClick={() => openEdit(o)}>
+                      <Pencil className="size-4" /> Edit
+                    </Button>
+                  </Can>
+                  <Can resource={RESOURCES.orders} action="delete">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setDeleting(o)}
+                    >
+                      <Trash2 className="size-4" /> Delete
+                    </Button>
+                  </Can>
+                </>
+              }
+            >
+              <RecordField label="Delivery date">{dateLabel(o.delivery_date)}</RecordField>
+              <RecordField label="Quantities" align="stretch">
+                {/* Six product columns will not fit side by side on a phone, so
+                    the ones this order actually has become chips. */}
+                <div className="flex flex-wrap gap-1.5">
+                  {products.map((prod) => {
+                    const qty = qtyFor(o, prod.id);
+                    return qty ? (
+                      <span
+                        key={prod.id}
+                        className="num rounded-md bg-secondary px-2 py-0.5 text-xs"
+                      >
+                        {prod.short_name} {num(qty)}
+                      </span>
+                    ) : null;
+                  })}
+                  {o.total_qty === 0 && <span className="text-xs text-muted-foreground">—</span>}
+                </div>
+              </RecordField>
+              <RecordField label="Total">
+                <span className="num font-semibold">{num(o.total_qty)} units</span>
+              </RecordField>
+            </RecordCard>
+          ))}
+        </RecordCards>
+
+        <DataPagination pagination={pagination} noun="orders" />
       </div>
     </>
   );

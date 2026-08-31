@@ -168,7 +168,7 @@ function DeliverySheetPage() {
               }}
               highlightedDates={dueDates}
               allowClear={false}
-              className="w-[200px]"
+              className="w-full sm:w-[200px]"
             />
             <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
             <Button

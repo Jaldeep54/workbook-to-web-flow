@@ -94,9 +94,13 @@ payoutSchema.index({ payout_date: -1 });
 export const Payout = model<IPayout>("Payout", payoutSchema, "payouts");
 
 /**
- * Invoice numbers must be stable (regenerating a bill for the same order must
- * reuse its number) and race-safe when a batch of bills is generated at once.
- * One row per order, allocated through the atomic counter below.
+ * Legacy invoice numbers.
+ *
+ * Bills once carried their own global sequence, allocated here. They now print
+ * the order's own number scoped by the shop's code (see services/bill.service.ts),
+ * which is stable by construction and needs no allocation — so nothing writes
+ * to this collection any more. The model is kept only so deleting an order
+ * still clears the row a pre-existing bill left behind.
  */
 export interface IInvoice {
   _id: string;
@@ -117,7 +121,7 @@ const invoiceSchema = new Schema<IInvoice>(
 
 export const Invoice = model<IInvoice>("Invoice", invoiceSchema, "invoices");
 
-/** Atomic sequence generator ($inc + upsert), used for invoice numbers. */
+/** Atomic sequence generator ($inc + upsert), for any counter that needs one. */
 export interface ICounter {
   _id: string;
   seq: number;

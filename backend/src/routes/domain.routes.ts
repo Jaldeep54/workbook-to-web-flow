@@ -36,6 +36,7 @@ import {
   orderListQuery,
   orderStatusSchema,
   orderUpdateSchema,
+  paymentListQuery,
   paymentUpdateSchema,
   payoutSchema,
   productCreateSchema,
@@ -295,8 +296,14 @@ export const paymentRouter = Router();
 paymentRouter.get(
   "/",
   authorize(RESOURCES.payments, "view"),
-  validate({ query: monthListQuery }),
+  validate({ query: paymentListQuery }),
   asyncHandler(payments.listPayments),
+);
+/** People a payment can be "Collected by" — see the controller for who qualifies. */
+paymentRouter.get(
+  "/collectors",
+  authorize(RESOURCES.payments, "view"),
+  asyncHandler(payments.listCollectors),
 );
 paymentRouter.get(
   "/:id",

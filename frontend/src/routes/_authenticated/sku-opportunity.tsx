@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, Lightbulb, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/app-shell";
+import { DataPagination, usePagination } from "@/components/data-pagination";
 import { RequirePermission } from "@/components/require-permission";
 import { RESOURCES } from "@/hooks/usePermissions";
 import { ProductChips } from "@/components/product-multi-select";
@@ -73,6 +74,10 @@ function SkuOpportunityPage() {
     return out;
   }, [rows, shops, search, areaFilter, salesSort]);
 
+  const pagination = usePagination(filtered, {
+    resetKey: `${search}-${areaFilter}-${salesSort}`,
+  });
+
   const withGaps = rows.filter((r) => (r.inactive_products ?? []).length > 0);
   const potential = withGaps.reduce((a, r) => a + Number(r.avg_monthly_sales), 0);
 
@@ -110,7 +115,7 @@ function SkuOpportunityPage() {
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard label="Shops tracked" value={String(rows.length)} />
         <StatCard
           label="Shops with open SKUs"
@@ -173,9 +178,11 @@ function SkuOpportunityPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {filtered.map((r, i) => (
+              {pagination.pageRows.map((r, i) => (
                 <TableRow key={r.shop_id}>
-                  <TableCell className="num text-right text-muted-foreground">{i + 1}</TableCell>
+                  <TableCell className="num text-right text-muted-foreground">
+                    {pagination.firstRow + i}
+                  </TableCell>
                   <TableCell>
                     <Link
                       to="/shops/$shopId"
@@ -205,6 +212,7 @@ function SkuOpportunityPage() {
             </TableBody>
           </Table>
         </div>
+        <DataPagination pagination={pagination} noun="shops" />
       </div>
     </>
   );

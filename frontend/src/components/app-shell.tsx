@@ -206,11 +206,20 @@ export function PageHeader({
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
+      <div className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl">{title}</h1>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {/* A phone gets two tidy columns of controls rather than a ragged
+          wrapped row; from sm up they take their own widths and flow as
+          before. Grid items stretch to their cell by default, so a control
+          fills its column without this having to override its width — which
+          is what lets each one keep its own `sm:w-[…]`. */}
+      {actions && (
+        <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:flex-wrap">
+          {actions}
+        </div>
+      )}
     </div>
   );
 }

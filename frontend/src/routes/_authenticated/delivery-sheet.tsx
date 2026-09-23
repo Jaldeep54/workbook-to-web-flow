@@ -167,6 +167,7 @@ function DeliverySheetPage() {
                 setMonth(monthKey(d));
               }}
               highlightedDates={dueDates}
+              month={month}
               allowClear={false}
               className="w-full sm:w-[200px]"
             />

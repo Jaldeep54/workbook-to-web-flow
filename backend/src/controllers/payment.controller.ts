@@ -71,7 +71,14 @@ function intersectShopIds(filter: Record<string, unknown>, ids: string[] | null)
 export async function listPayments(req: Request, res: Response) {
   const { page, limit, skip, search, sort } = parseListQuery(
     req.query as Record<string, unknown>,
-    ["payment_date", "amount", "amount_received", "collected_date", "created_at"],
+    [
+      "payment_date",
+      "amount",
+      "amount_received",
+      "collected_date",
+      "expected_collection_date",
+      "created_at",
+    ],
     { sortBy: "payment_date", sortOrder: "desc", limit: 200 },
   );
 
@@ -147,6 +154,7 @@ export async function updatePayment(req: Request, res: Response) {
     collected_by?: string | null;
     collected_by_user_id?: string | null;
     collected_date?: string | null;
+    expected_collection_date?: string | null;
     amount?: number;
     amount_received?: number;
   };
@@ -186,6 +194,9 @@ export async function updatePayment(req: Request, res: Response) {
   }
 
   if (body.collected_date !== undefined) payment.collected_date = body.collected_date || null;
+  if (body.expected_collection_date !== undefined) {
+    payment.expected_collection_date = body.expected_collection_date || null;
+  }
 
   // Recomputed here as well as in the model's hook, so the value is right in
   // this response even if a future write path skips validation.

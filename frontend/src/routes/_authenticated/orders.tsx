@@ -186,13 +186,23 @@ function OrdersPage() {
               onChange={(newFy, suggestedMonth) => {
                 setFy(newFy);
                 setMonth(suggestedMonth);
+                setExactDate(null);
               }}
               dates={orders.map((o) => o.order_date)}
             />
-            <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
+            <MonthPicker
+              value={month}
+              onChange={(m) => {
+                setMonth(m);
+                // A day from the old month would filter the new one down to nothing.
+                setExactDate(null);
+              }}
+              financialYear={fy}
+            />
             <HighlightedDatePicker
               value={exactDate}
               onChange={setExactDate}
+              month={month}
               highlightedDates={orderDatesThisMonth}
               placeholder="Any date"
             />

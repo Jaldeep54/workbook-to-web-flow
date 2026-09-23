@@ -120,6 +120,33 @@ describe("Orders, deliveries and payments", () => {
     expect(delivery.total_sales).toBeCloseTo(20 * products[0].selling_price, 2);
   });
 
+  it("stores, clears and rejects an expected collection date", async () => {
+    const order = await createOrder(2, "2026-08-22");
+    await admin.patch(`/orders/${order.body.data.id}/status`).send({ status: "Delivered" });
+    const payment = (await admin.get("/payments?month=2026-08-01")).body.data.find(
+      (p: { order_id: string }) => p.order_id === order.body.data.id,
+    );
+
+    const set = await admin
+      .patch(`/payments/${payment.id}`)
+      .send({ expected_collection_date: "2026-08-20" });
+    expect(set.status).toBe(200);
+    expect(set.body.data.expected_collection_date).toBe("2026-08-20");
+    // A promise to pay is not a payment: nothing about the money changes.
+    expect(set.body.data.status).toBe("Pending");
+    expect(set.body.data.collected_date ?? null).toBeNull();
+
+    const cleared = await admin
+      .patch(`/payments/${payment.id}`)
+      .send({ expected_collection_date: null });
+    expect(cleared.body.data.expected_collection_date).toBeNull();
+
+    expectError(
+      await admin.patch(`/payments/${payment.id}`).send({ expected_collection_date: "20-08-2026" }),
+      422,
+    );
+  });
+
   it("keeps a received payment's amount when the order is re-delivered", async () => {
     const order = await createOrder(3, "2026-08-05");
     await admin.patch(`/orders/${order.body.data.id}/status`).send({ status: "Delivered" });

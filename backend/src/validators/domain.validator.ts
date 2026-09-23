@@ -181,6 +181,7 @@ export const paymentUpdateSchema = z
     /** When set, the API overwrites `collected_by` with that user's name. */
     collected_by_user_id: idString.nullish(),
     collected_date: isoDate.nullish(),
+    expected_collection_date: isoDate.nullish(),
     amount: z.coerce.number().min(0).optional(),
     /** Running total of what the shop has actually handed over. */
     amount_received: z.coerce.number().min(0).optional(),

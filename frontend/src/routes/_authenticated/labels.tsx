@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { AlertTriangle, Download, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, Download, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
@@ -9,7 +9,8 @@ import { DataPagination, usePagination } from "@/components/data-pagination";
 import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { MonthPicker } from "@/components/month-picker";
 import { ShopAreaFilter, ShopFilter } from "@/components/filter-bar";
-import { SearchableShopSelect } from "@/components/shop-select";
+import { HighlightedDatePicker } from "@/components/highlighted-date-picker";
+import { LabelOrderDialog } from "@/components/label-order-dialog";
 import { LabelOrderSuggestionTab } from "@/components/label-order-suggestion";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
@@ -17,14 +18,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,15 +41,9 @@ import { Can, RESOURCES } from "@/hooks/usePermissions";
 import { labelOrdersApi } from "@/services/klinzo.service";
 import { labelProductsQuery, labelStockQuery, shopAreasQuery, shopsQuery } from "@/lib/queries";
 import { labelOrdersQuery, type LabelOrderRecord } from "@/lib/records";
-import {
-  currentFinancialYear,
-  currentMonth,
-  labelsFromSheets,
-  monthKey,
-  monthLabel,
-} from "@/lib/domain";
+import { currentFinancialYear, currentMonth, monthKey, monthLabel } from "@/lib/domain";
 import type { Shop } from "@/lib/domain";
-import { dateLabel, inr, num, todayISO } from "@/lib/format";
+import { dateLabel, num } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 import { cn } from "@/lib/utils";
 
@@ -84,7 +71,11 @@ function LabelsPage() {
           <TabsTrigger value="suggestion">Label Order Suggestion</TabsTrigger>
         </TabsList>
         <TabsContent value="stock" className="pt-4">
-          <StockDashboard />
+          <StockDashboard
+            onOrderSaved={(orderDate) => {
+              setMonth(monthKey(orderDate));
+            }}
+          />
         </TabsContent>
         <TabsContent value="orders" className="pt-4">
           <LabelOrders month={month} setMonth={setMonth} />
@@ -102,11 +93,13 @@ function LabelsPage() {
   );
 }
 
-function StockDashboard() {
+function StockDashboard({ onOrderSaved }: { onOrderSaved: (orderDate: string) => void }) {
   const { data: labelProducts = [] } = useQuery(labelProductsQuery);
   const { data: rows = [], isLoading } = useQuery(labelStockQuery);
   const [onlyLow, setOnlyLow] = useState(true);
   const [search, setSearch] = useState("");
+  /** The shop whose row "Add order" was clicked on — opens the order form. */
+  const [orderShopId, setOrderShopId] = useState<string | null>(null);
 
   // A shop only "needs labels" when an ACTIVE product (one in shop_products) is low — a leftover
   // balance on a product the shop no longer sells never counts, and is always shown as NA.
@@ -212,13 +205,14 @@ function StockDashboard() {
                     {lp.short_name}
                   </TableHead>
                 ))}
+                <TableHead className="w-28 text-right">Order</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
                 <TableRow>
                   <TableCell
-                    colSpan={labelProducts.length + 2}
+                    colSpan={labelProducts.length + 3}
                     className="py-10 text-center text-muted-foreground"
                   >
                     Calculating stock…
@@ -228,7 +222,7 @@ function StockDashboard() {
               {!isLoading && filtered.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={labelProducts.length + 2}
+                    colSpan={labelProducts.length + 3}
                     className="py-12 text-center text-muted-foreground"
                   >
                     Nothing to reorder right now.
@@ -258,6 +252,18 @@ function StockDashboard() {
                       </TableCell>
                     );
                   })}
+                  <TableCell className="text-right">
+                    <Can resource={RESOURCES.labelOrders} action="create">
+                      <Button
+                        size="sm"
+                        variant={s.low > 0 ? "default" : "outline"}
+                        onClick={() => setOrderShopId(s.shopId)}
+                        aria-label={`Add a label order for ${s.shopName}`}
+                      >
+                        <Plus className="size-3.5" /> Add order
+                      </Button>
+                    </Can>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -265,6 +271,13 @@ function StockDashboard() {
         </div>
         <DataPagination pagination={pagination} noun="shops" />
       </div>
+
+      <LabelOrderDialog
+        open={!!orderShopId}
+        onOpenChange={(o) => !o && setOrderShopId(null)}
+        presetShopId={orderShopId}
+        onSaved={onOrderSaved}
+      />
     </>
   );
 }
@@ -276,10 +289,6 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
   const [areaFilter, setAreaFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
   const [open, setOpen] = useState(false);
-  const [shopId, setShopId] = useState("");
-  const [dialogAreaFilter, setDialogAreaFilter] = useState("all");
-  const [orderDate, setOrderDate] = useState(todayISO());
-  const [sheets, setSheets] = useState<Record<string, number>>({});
   const [orderToDelete, setOrderToDelete] = useState<LabelOrderRecord | null>(null);
 
   const { data: labelProducts = [] } = useQuery(labelProductsQuery);
@@ -320,44 +329,6 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
     return map;
   }, [orders]);
 
-  const totals = labelProducts.reduce(
-    (acc, lp) => {
-      const s = Number(sheets[lp.id]) || 0;
-      acc.sheets += s;
-      acc.labels += labelsFromSheets(s, lp.labels_per_sheet);
-      acc.cost += s * lp.sheet_cost;
-      return acc;
-    },
-    { sheets: 0, labels: 0, cost: 0 },
-  );
-
-  const create = useMutation({
-    mutationFn: async () => {
-      if (!shopId) throw new Error("Choose a shop");
-      // Order numbering and the labels-produced figure are the server's job,
-      // so two people saving at once can't land on the same order number.
-      await labelOrdersApi.create({
-        shop_id: shopId,
-        order_date: orderDate,
-        lines: labelProducts
-          .filter((lp) => (sheets[lp.id] ?? 0) > 0)
-          .map((lp) => ({ label_product_id: lp.id, sheets: sheets[lp.id] })),
-      });
-    },
-    onSuccess: () => {
-      toast.success("Label order recorded");
-      setOpen(false);
-      setSheets({});
-      void qc.invalidateQueries({ queryKey: ["label_orders"] });
-      void qc.invalidateQueries({ queryKey: ["label_stock"] });
-      void qc.invalidateQueries({ queryKey: ["label_stock_summary"] });
-      void qc.invalidateQueries({ queryKey: ["dashboard_summary"] });
-      void qc.invalidateQueries({ queryKey: ["available_months"] });
-      setMonth(monthKey(orderDate));
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
   const deleteOrder = useMutation({
     mutationFn: async (order: LabelOrderRecord) => {
       // The order's line items are embedded in the same document, so deleting
@@ -379,6 +350,12 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Days in the month that have a label order, marked with a dot in the calendar.
+  const orderDatesThisMonth = useMemo(
+    () => Array.from(new Set(monthOrders.map((o) => o.order_date).filter((d): d is string => !!d))),
+    [monthOrders],
+  );
+
   const sheetsFor = (order: (typeof orders)[number], labelProductId: string) =>
     order.label_order_lines.find((l) => l.label_product_id === labelProductId)?.sheets ?? 0;
 
@@ -390,30 +367,28 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
           onChange={(newFy, suggestedMonth) => {
             setFy(newFy);
             setMonth(suggestedMonth);
+            setDateFilter("");
           }}
           dates={monthOrders.map((o) => o.order_date)}
         />
-        <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
-        <div className="flex items-center gap-1">
-          <Input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="w-full bg-card sm:w-[150px]"
-            aria-label="Filter to a single date"
-          />
-          {dateFilter && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-9"
-              onClick={() => setDateFilter("")}
-              aria-label="Clear date filter"
-            >
-              <X className="size-4" />
-            </Button>
-          )}
-        </div>
+        <MonthPicker
+          value={month}
+          onChange={(m) => {
+            setMonth(m);
+            // A day from the old month would filter the new one down to nothing.
+            setDateFilter("");
+          }}
+          financialYear={fy}
+        />
+        {/* The same calendar as Orders and the Delivery Sheet: it opens on the
+            selected month and dots the days that have label orders. */}
+        <HighlightedDatePicker
+          value={dateFilter || null}
+          onChange={(d) => setDateFilter(d ?? "")}
+          month={month}
+          highlightedDates={orderDatesThisMonth}
+          placeholder="Any date"
+        />
         <ShopAreaFilter
           value={areaFilter}
           onChange={(area) => {
@@ -447,106 +422,16 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
         >
           <Download className="size-4" /> Export
         </Button>
-        <Dialog
+        <Can resource={RESOURCES.labelOrders} action="create">
+          <Button onClick={() => setOpen(true)}>
+            <Plus className="size-4" /> New label order
+          </Button>
+        </Can>
+        <LabelOrderDialog
           open={open}
-          onOpenChange={(o) => {
-            setOpen(o);
-            if (o) {
-              setDialogAreaFilter("all");
-              setShopId("");
-            }
-          }}
-        >
-          <Can resource={RESOURCES.labelOrders} action="create">
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="size-4" /> New label order
-              </Button>
-            </DialogTrigger>
-          </Can>
-          <DialogContent className="max-w-xl">
-            <DialogHeader>
-              <DialogTitle>New label order</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Shop area</Label>
-                  <ShopAreaFilter
-                    value={dialogAreaFilter}
-                    onChange={(area) => {
-                      setDialogAreaFilter(area);
-                      setShopId("");
-                    }}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Shop</Label>
-                  <SearchableShopSelect
-                    value={shopId}
-                    onChange={setShopId}
-                    areaId={dialogAreaFilter !== "all" ? dialogAreaFilter : null}
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Order date</Label>
-                <Input
-                  type="date"
-                  value={orderDate}
-                  onChange={(e) => setOrderDate(e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Sheets printed
-              </p>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {labelProducts.map((lp) => (
-                  <div key={lp.id} className="space-y-1.5">
-                    <Label className="text-xs" htmlFor={`sheet-${lp.id}`}>
-                      {lp.short_name}{" "}
-                      <span className="text-muted-foreground">×{num(lp.labels_per_sheet)}</span>
-                    </Label>
-                    <Input
-                      id={`sheet-${lp.id}`}
-                      type="number"
-                      min={0}
-                      className="num"
-                      value={sheets[lp.id] ?? ""}
-                      onChange={(e) =>
-                        setSheets({
-                          ...sheets,
-                          [lp.id]: e.target.value === "" ? 0 : Number(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="num grid grid-cols-3 gap-2 rounded-lg bg-secondary p-4 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">Sheets</p>
-                <p className="font-medium">{num(totals.sheets)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Labels</p>
-                <p className="font-medium">{num(totals.labels)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Printing cost</p>
-                <p className="font-medium">{inr(totals.cost, 2)}</p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={() => create.mutate()} disabled={!shopId || create.isPending}>
-                Save label order
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          onOpenChange={setOpen}
+          onSaved={(orderDate) => setMonth(monthKey(orderDate))}
+        />
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">

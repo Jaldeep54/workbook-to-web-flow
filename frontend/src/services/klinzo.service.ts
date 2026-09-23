@@ -188,6 +188,8 @@ export type PaymentRecord = {
   collected_by: string | null;
   collected_by_user_id: string | null;
   collected_date: string | null;
+  /** When the shop has promised to pay; unset on rows that predate the field. */
+  expected_collection_date?: string | null;
   amount: number;
   amount_received: number;
   balance: number;
@@ -214,6 +216,7 @@ export const paymentsApi = {
       collected_by?: string | null;
       collected_by_user_id?: string | null;
       collected_date?: string | null;
+      expected_collection_date?: string | null;
       amount_received?: number;
     },
   ) => api.patch<PaymentRecord>(`/payments/${id}`, payload),

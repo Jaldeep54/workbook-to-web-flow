@@ -144,6 +144,8 @@ export interface IPayment {
   collected_by_user_id: string | null;
   /** When the money actually arrived, distinct from payment_date. */
   collected_date: string | null;
+  /** When the shop has promised to pay — a plan, set before any money arrives. */
+  expected_collection_date: string | null;
   /** What the delivery is worth — the full bill for this order. */
   amount: number;
   /**
@@ -182,6 +184,7 @@ const paymentSchema = new Schema<IPayment>(
     collected_by: { type: String, default: null, maxlength: 80, trim: true },
     collected_by_user_id: { type: String, ref: "User", default: null },
     collected_date: { type: String, default: null, match: ISO_DATE_MATCH },
+    expected_collection_date: { type: String, default: null, match: ISO_DATE_MATCH },
     amount: { type: Number, default: 0, min: 0 },
     amount_received: { type: Number, default: 0, min: 0 },
   },

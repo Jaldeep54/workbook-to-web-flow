@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { CheckCircle2, Download, Wallet } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Download, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
@@ -37,7 +37,7 @@ import { paymentsApi, type PaymentCollector } from "@/services/klinzo.service";
 import { shopsQuery } from "@/lib/queries";
 import { paymentCollectorsQuery, paymentsQuery, type PaymentRecord } from "@/lib/records";
 import { currentFinancialYear, currentMonth, monthLabel } from "@/lib/domain";
-import { dateLabel, inr, num } from "@/lib/format";
+import { dateLabel, inr, num, todayISO } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +59,13 @@ const STATUS_FILTERS = [
   { value: "Received", label: "Paid in full" },
 ] as const;
 
+/**
+ * Status sorts by how far a bill is from being settled — not paid, then part
+ * paid, then paid in full — rather than alphabetically, which would put
+ * "Partial" between the other two for no reason a collector would recognise.
+ */
+const STATUS_RANK: Record<string, number> = { Pending: 0, Partial: 1, Received: 2 };
+
 /** What a row's controls need, whichever of the two layouts is rendering it. */
 type RowProps = {
   payment: PaymentRecord;
@@ -68,6 +75,7 @@ type RowProps = {
   onSettle: (payment: PaymentRecord) => void;
   onCollector: (payment: PaymentRecord, userId: string | null) => void;
   onCollectedDate: (payment: PaymentRecord, date: string | null) => void;
+  onExpectedDate: (payment: PaymentRecord, date: string | null) => void;
   collectors: PaymentCollector[];
 };
 
@@ -94,6 +102,7 @@ function PaymentsPage() {
   const [shopFilter, setShopFilter] = useState("all");
   const [areaFilter, setAreaFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusSort, setStatusSort] = useState<"none" | "asc" | "desc">("none");
   const [search, setSearch] = useState("");
 
   const { data: shops = [] } = useQuery(shopsQuery);
@@ -129,8 +138,21 @@ function PaymentsPage() {
     [scoped, statusFilter, search],
   );
 
-  const pagination = usePagination(filtered, {
-    resetKey: `${month}-${shopFilter}-${areaFilter}-${statusFilter}-${search}`,
+  // Sorting is stable, so rows of the same status keep the API's date order.
+  const sorted = useMemo(() => {
+    if (statusSort === "none") return filtered;
+    const dir = statusSort === "asc" ? 1 : -1;
+    return [...filtered].sort(
+      (a, b) => ((STATUS_RANK[a.status ?? ""] ?? 0) - (STATUS_RANK[b.status ?? ""] ?? 0)) * dir,
+    );
+  }, [filtered, statusSort]);
+
+  // Cycles: API date order → not paid first → paid first → back again.
+  const cycleStatusSort = () =>
+    setStatusSort((s) => (s === "none" ? "asc" : s === "asc" ? "desc" : "none"));
+
+  const pagination = usePagination(sorted, {
+    resetKey: `${month}-${shopFilter}-${areaFilter}-${statusFilter}-${search}-${statusSort}`,
   });
 
   const totals = useMemo(() => {
@@ -157,6 +179,7 @@ function PaymentsPage() {
         amount_received?: number;
         collected_by_user_id?: string | null;
         collected_date?: string | null;
+        expected_collection_date?: string | null;
       };
     }) => paymentsApi.update(id, patch),
     onSuccess: (payment) => {
@@ -204,6 +227,8 @@ function PaymentsPage() {
       update.mutate({ id: payment.id, patch: { collected_by_user_id: userId } }),
     onCollectedDate: (payment: PaymentRecord, date: string | null) =>
       update.mutate({ id: payment.id, patch: { collected_date: date } }),
+    onExpectedDate: (payment: PaymentRecord, date: string | null) =>
+      update.mutate({ id: payment.id, patch: { expected_collection_date: date } }),
   };
 
   const emptyMessage =
@@ -269,6 +294,7 @@ function PaymentsPage() {
                     Status: p.status ?? "",
                     "Collected by": p.collected_by ?? "",
                     "Date of collection": p.collected_date ?? "",
+                    "Expected collection date": p.expected_collection_date ?? "",
                   })),
                 )
               }
@@ -348,22 +374,47 @@ function PaymentsPage() {
                 <TableHead className="whitespace-nowrap text-right">Bill amount</TableHead>
                 <TableHead className="text-right">Received</TableHead>
                 <TableHead className="text-right">Balance</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead
+                  aria-sort={
+                    statusSort === "asc"
+                      ? "ascending"
+                      : statusSort === "desc"
+                        ? "descending"
+                        : "none"
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={cycleStatusSort}
+                    className="inline-flex items-center gap-1 whitespace-nowrap hover:text-foreground"
+                    title="Sort by status"
+                  >
+                    Status
+                    {statusSort === "asc" ? (
+                      <ArrowUp className="size-3.5" />
+                    ) : statusSort === "desc" ? (
+                      <ArrowDown className="size-3.5" />
+                    ) : (
+                      <ArrowUpDown className="size-3.5 opacity-40" />
+                    )}
+                  </button>
+                </TableHead>
                 <TableHead>Collected by</TableHead>
                 <TableHead className="whitespace-nowrap">Date of collection</TableHead>
+                <TableHead className="whitespace-nowrap">Expected collection date</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                     Loading payments…
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="py-12 text-center text-muted-foreground">
                     {emptyMessage}
                   </TableCell>
                 </TableRow>
@@ -401,6 +452,9 @@ function PaymentsPage() {
                   </TableCell>
                   <TableCell>
                     <CollectedDateControl payment={p} {...rowProps} className="w-[150px]" />
+                  </TableCell>
+                  <TableCell>
+                    <ExpectedDateControl payment={p} {...rowProps} className="w-[150px]" />
                   </TableCell>
                 </TableRow>
               ))}
@@ -447,6 +501,13 @@ function PaymentsPage() {
               </RecordField>
               <RecordField label="Date of collection" align="stretch">
                 <CollectedDateControl
+                  payment={p}
+                  {...rowProps}
+                  className="w-full sm:max-w-[260px]"
+                />
+              </RecordField>
+              <RecordField label="Expected collection date" align="stretch">
+                <ExpectedDateControl
                   payment={p}
                   {...rowProps}
                   className="w-full sm:max-w-[260px]"
@@ -565,6 +626,36 @@ function CollectedDateControl({
       onBlur={(e) => {
         const value = e.target.value;
         if (value !== (payment.collected_date ?? "")) onCollectedDate(payment, value || null);
+      }}
+    />
+  );
+}
+
+/**
+ * When the shop has promised to pay. Once that day has passed on a bill that
+ * still isn't settled, the date turns red — the promises that have slipped
+ * are what a collector plans the day's round from.
+ */
+function ExpectedDateControl({
+  payment,
+  canUpdate,
+  onExpectedDate,
+  className,
+}: RowProps & { className?: string }) {
+  const expected = payment.expected_collection_date ?? "";
+  const overdue = !!expected && payment.status !== "Received" && expected < todayISO();
+  return (
+    <Input
+      type="date"
+      key={`${payment.id}-${expected}`}
+      defaultValue={expected}
+      readOnly={!canUpdate}
+      aria-label="Expected collection date"
+      title={overdue ? "The promised date has passed" : undefined}
+      className={cn(className, overdue && "border-destructive text-destructive")}
+      onBlur={(e) => {
+        const value = e.target.value;
+        if (value !== expected) onExpectedDate(payment, value || null);
       }}
     />
   );

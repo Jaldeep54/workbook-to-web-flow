@@ -17,6 +17,9 @@ import {
   MapPin,
   Users,
   Wallet,
+  Smartphone,
+  UserCog,
+  UserCheck,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
@@ -40,6 +43,12 @@ const NAV: Array<{
   section?: string;
 }> = [
   { to: "/", label: "Overview", icon: LayoutDashboard, resource: RESOURCES.dashboard },
+  {
+    to: "/field-ops",
+    label: "Field Operations",
+    icon: Smartphone,
+    resource: RESOURCES.fieldOperations,
+  },
   { to: "/shops", label: "Shops", icon: Store, resource: RESOURCES.shops },
   { to: "/shops/map", label: "Shops on Map", icon: MapPin, resource: RESOURCES.shops },
   {
@@ -61,6 +70,20 @@ const NAV: Array<{
   { to: "/costs", label: "Variable costs", icon: Receipt, resource: RESOURCES.costs },
   { to: "/cash-position", label: "Cash Position", icon: Wallet, resource: RESOURCES.cashPosition },
   { to: "/reports", label: "Reports", icon: BarChart3, resource: RESOURCES.reports },
+  {
+    to: "/manager-dashboard",
+    label: "Manager Dashboard",
+    icon: UserCog,
+    resource: RESOURCES.managerDashboard,
+    section: "Field team",
+  },
+  {
+    to: "/salesperson-dashboard",
+    label: "Salesperson Dashboard",
+    icon: UserCheck,
+    resource: RESOURCES.salespersonDashboard,
+    section: "Field team",
+  },
   { to: "/settings", label: "Rates & settings", icon: Settings, resource: RESOURCES.products },
   {
     to: "/admin/users",

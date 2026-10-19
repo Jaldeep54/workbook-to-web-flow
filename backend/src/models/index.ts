@@ -8,3 +8,4 @@ export * from "./catalogue.model.js";
 export * from "./shop.model.js";
 export * from "./order.model.js";
 export * from "./finance.model.js";
+export * from "./collection.model.js";

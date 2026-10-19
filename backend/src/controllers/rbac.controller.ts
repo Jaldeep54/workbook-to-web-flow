@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 
 import { Permission, permissionName } from "../models/permission.model.js";
-import { ADMIN_ROLE_SLUG, Role, slugifyRoleName } from "../models/role.model.js";
+import { ADMIN_ROLE_SLUG, Role, slugifyRoleName, type FieldRole } from "../models/role.model.js";
 import { User } from "../models/user.model.js";
 import {
   assertPermissionIdsExist,
@@ -114,6 +114,7 @@ async function presentRole(roleId: string) {
     description: role.description,
     isSystem: role.isSystem,
     handlesShops: role.handlesShops ?? false,
+    fieldRole: role.fieldRole ?? null,
     userCount,
     permissions: permissions.map((p) => ({
       id: p._id,
@@ -145,6 +146,7 @@ export async function listRoles(_req: Request, res: Response) {
       description: role.description,
       isSystem: role.isSystem,
       handlesShops: role.handlesShops ?? false,
+      fieldRole: role.fieldRole ?? null,
       permissionIds: role.permissions ?? [],
       permissionCount: (role.permissions ?? []).length,
       userCount: countByRole.get(role._id) ?? 0,
@@ -163,6 +165,7 @@ export async function createRole(req: Request, res: Response) {
     description: string;
     permissions: string[];
     handlesShops?: boolean;
+    fieldRole?: FieldRole | null;
   };
   const slug = slugifyRoleName(body.name);
   if (!slug) throw ApiError.badRequest("Role name must contain letters or numbers");
@@ -176,6 +179,7 @@ export async function createRole(req: Request, res: Response) {
     description: body.description ?? "",
     permissions: body.permissions ?? [],
     handlesShops: body.handlesShops ?? false,
+    fieldRole: body.fieldRole ?? null,
   });
 
   return created(res, await presentRole(role._id));
@@ -190,6 +194,7 @@ export async function updateRole(req: Request, res: Response) {
     description: string;
     permissions: string[];
     handlesShops: boolean;
+    fieldRole: FieldRole | null;
   }>;
 
   if (body.name && body.name !== role.name) {
@@ -204,6 +209,7 @@ export async function updateRole(req: Request, res: Response) {
 
   if (body.description !== undefined) role.description = body.description;
   if (body.handlesShops !== undefined) role.handlesShops = body.handlesShops;
+  if (body.fieldRole !== undefined) role.fieldRole = body.fieldRole;
 
   if (body.permissions) {
     await assertPermissionIdsExist(body.permissions);

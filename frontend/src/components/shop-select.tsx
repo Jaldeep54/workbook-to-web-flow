@@ -22,12 +22,15 @@ import { cn } from "@/lib/utils";
  * composes with the search box, which further narrows within that area.
  * Pass `excludeShopIds` to drop shops that aren't valid to pick right now
  * (New Order uses it for shops that already ordered on the chosen date).
+ * Pass `onlyShopIds` to offer just those shops (Field Operations limits a
+ * manager or salesperson to the shops assigned to them).
  */
 export function SearchableShopSelect({
   value,
   onChange,
   areaId,
   excludeShopIds,
+  onlyShopIds,
   placeholder = "Select shop",
   emptyMessage,
 }: {
@@ -35,12 +38,14 @@ export function SearchableShopSelect({
   onChange: (shopId: string) => void;
   areaId?: string | null;
   excludeShopIds?: ReadonlySet<string>;
+  onlyShopIds?: ReadonlySet<string>;
   placeholder?: string;
   /** Shown when every shop has been filtered out. */
   emptyMessage?: string;
 }) {
   const { data: allShops = [] } = useQuery(shopsQuery);
-  const inArea = areaId ? allShops.filter((s) => s.area_id === areaId) : allShops;
+  const allowed = onlyShopIds ? allShops.filter((s) => onlyShopIds.has(s.id)) : allShops;
+  const inArea = areaId ? allowed.filter((s) => s.area_id === areaId) : allowed;
   // The current value always stays selectable, so a shop can never vanish from
   // under a selection that has already been made.
   const shops = excludeShopIds

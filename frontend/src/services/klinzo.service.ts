@@ -1,5 +1,8 @@
 import type { LabelProduct, LabelSuggestionStatus, Product, Shop, ShopArea } from "@/lib/domain";
 import { api, apiRequest, apiRequestWithMeta } from "./api-client";
+import type { FieldRole } from "./auth.service";
+
+export type { FieldRole };
 
 /**
  * Typed wrappers around the Klinzo Operations API, grouped by module.
@@ -33,6 +36,8 @@ export const shopsApi = {
   productLinks: () => api.get<ShopProductLink[]>("/shops/products"),
   /** People a shop can be "Handled by" — see `ShopHandler`. */
   handlers: () => api.get<ShopHandler[]>("/shops/handlers"),
+  /** People a shop's "Salesperson" can be — users of salesperson roles. */
+  salespersons: () => api.get<ShopHandler[]>("/shops/salespersons"),
   uploadImage: (id: string, file: File) => {
     const form = new FormData();
     form.append("image", file);
@@ -339,6 +344,8 @@ export type CashPositionSummary = {
   paymentsReceivedTotal: number;
   variableCostsTotal: number;
   payoutsTotal: number;
+  /** Change money marked paid on the Manager Dashboard — leaves cash in hand. */
+  changeMoneyPaidTotal: number;
   moneyInHand: number;
 };
 
@@ -538,6 +545,177 @@ export const importApi = {
   },
 };
 
+/* -------------------------------------------------------- field operations */
+
+/** A row of the Field Operations Shops List. */
+export type FieldShop = {
+  id: string;
+  code: string;
+  shop_name: string;
+  label_name: string | null;
+  area_id: string | null;
+  area_name: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  mobile: string | null;
+  handled_by: string | null;
+  handled_by_user_id: string | null;
+  salesperson: string | null;
+  salesperson_user_id: string | null;
+};
+
+/** One delivery still owed on, in the order Make Payment settles them (oldest first). */
+export type PendingDelivery = {
+  payment_id: string;
+  order_id: string;
+  order_no: number | null;
+  delivery_date: string | null;
+  amount: number;
+  amount_received: number;
+  balance: number;
+};
+
+export type CollectionRecord = {
+  id: string;
+  shop_id: string;
+  collection_date: string;
+  amount: number;
+  change_money: number;
+  collected_by: string | null;
+  collected_by_user_id: string | null;
+  allocations: Array<{ payment_id: string; order_id: string; amount: number }>;
+  change_money_paid: boolean;
+  change_money_paid_date: string | null;
+  change_money_paid_by: string | null;
+  created_at: string;
+};
+
+export const fieldOpsApi = {
+  /** `scope` is the caller's field team, or "all" for office staff who see every shop. */
+  shops: (areaId?: string) =>
+    api.get<{ scope: FieldRole | "all"; shops: FieldShop[] }>("/field-ops/shops", { areaId }),
+  collectors: () => api.get<Array<{ id: string; full_name: string }>>("/field-ops/collectors"),
+  pending: (shopId: string) =>
+    api.get<{ shop_id: string; total_pending: number; deliveries: PendingDelivery[] }>(
+      `/field-ops/shops/${shopId}/pending`,
+    ),
+  collections: (shopId: string) =>
+    api.get<CollectionRecord[]>(`/field-ops/shops/${shopId}/collections`),
+  makePayment: (
+    shopId: string,
+    payload: {
+      collection_date: string;
+      amount: number;
+      change_money: number;
+      collected_by_user_id?: string | null;
+    },
+  ) =>
+    api.post<{ collection: CollectionRecord; total_pending: number }>(
+      `/field-ops/shops/${shopId}/collections`,
+      payload,
+    ),
+  reverseCollection: (id: string) =>
+    api.delete<{ message: string }>(`/field-ops/collections/${id}`),
+};
+
+/* ---------------------------------------- manager & salesperson dashboards */
+
+export type TeamKind = "managers" | "salespersons";
+export type ActivityType = "orders" | "deliveries" | "collections" | "change_money";
+
+export type TeamMember = {
+  id: string;
+  full_name: string;
+  shop_count: number;
+  shops: Array<{ id: string; shop_name: string }>;
+};
+
+export type ActivityShop = {
+  shop_name: string;
+  label_name: string | null;
+  code: string;
+  area_name: string | null;
+} | null;
+
+export type ActivityRow = {
+  id: string;
+  date: string | null;
+  shop_id: string;
+  shop: ActivityShop;
+  /** Orders and deliveries. */
+  order_no?: number | null;
+  delivery_date?: string | null;
+  status?: string;
+  products?: string;
+  qty?: number;
+  /** Order value, delivery bill, or collected sum. */
+  amount: number;
+  delivered_by?: string | null;
+  /** Collections and change money. */
+  change_money?: number;
+  collected_by?: string | null;
+  change_money_paid?: boolean;
+  change_money_paid_date?: string | null;
+};
+
+export type ActivitySummary = {
+  count: number;
+  total: number;
+  qty?: number;
+  change_money?: number;
+  paid?: number;
+  unpaid?: number;
+};
+
+export type ActivityFilters = {
+  date?: string;
+  month?: string;
+  year?: string;
+  shopId?: string;
+  areaId?: string;
+};
+
+export type MemberShop = {
+  id: string;
+  shop_name: string;
+  label_name: string | null;
+  code: string;
+  area_id: string | null;
+  area_name: string | null;
+  address: string | null;
+  handled_by: string | null;
+  salesperson: string | null;
+  /** Why they have it: their own shop, a grant, or not at all. */
+  assignment: "primary" | "access" | null;
+};
+
+export const teamApi = {
+  list: (kind: TeamKind) => api.get<TeamMember[]>(`/team/${kind}`),
+  member: (kind: TeamKind, userId: string) =>
+    api.get<{ id: string; full_name: string; is_active: boolean }>(`/team/${kind}/${userId}`),
+  activity: (kind: TeamKind, userId: string, type: ActivityType, filters: ActivityFilters) =>
+    api.get<{ type: ActivityType; rows: ActivityRow[]; summary: ActivitySummary }>(
+      `/team/${kind}/${userId}/activity`,
+      { type, ...filters },
+    ),
+  shops: (kind: TeamKind, userId: string, params: { areaId?: string; assigned?: boolean } = {}) =>
+    api.get<MemberShop[]>(`/team/${kind}/${userId}/shops`, {
+      areaId: params.areaId,
+      assigned: params.assigned === false ? "false" : undefined,
+    }),
+  grant: (
+    kind: TeamKind,
+    userId: string,
+    payload: { shop_ids?: string[]; all?: boolean; area_id?: string | null },
+  ) =>
+    api.post<{ message: string; shops_affected: number }>(`/team/${kind}/${userId}/shops`, payload),
+  revoke: (kind: TeamKind, userId: string, shopId: string) =>
+    api.delete<{ message: string }>(`/team/${kind}/${userId}/shops/${shopId}`),
+  setChangeMoneyPaid: (collectionId: string, paid: boolean) =>
+    api.patch<CollectionRecord>(`/team/managers/change-money/${collectionId}`, { paid }),
+};
+
 /* ----------------------------------------------------------- users & roles */
 
 export type ManagedUser = {
@@ -560,6 +738,8 @@ export type ManagedRole = {
   isSystem: boolean;
   /** Members of this role fill a shop's "Handled by" picker. */
   handlesShops: boolean;
+  /** Puts members on the Manager or Salesperson Dashboard. */
+  fieldRole: FieldRole | null;
   permissionIds: string[];
   permissionCount: number;
   userCount: number;
@@ -623,6 +803,7 @@ export const rolesApi = {
     description?: string;
     permissions?: string[];
     handlesShops?: boolean;
+    fieldRole?: FieldRole | null;
   }) => api.post<ManagedRole>("/roles", payload),
   update: (
     id: string,
@@ -631,6 +812,7 @@ export const rolesApi = {
       description?: string;
       permissions?: string[];
       handlesShops?: boolean;
+      fieldRole?: FieldRole | null;
     },
   ) => api.patch<ManagedRole>(`/roles/${id}`, payload),
   setPermissions: (id: string, permissions: string[]) =>

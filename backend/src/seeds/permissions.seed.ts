@@ -117,6 +117,7 @@ export async function seedRoles(permissionIdByName: Map<string, string>): Promis
       // Members of any role flagged `handlesShops` populate a shop's
       // "Handled by" picker — deactivate the user to retire them from it.
       handlesShops: true,
+      fieldRole: "salesperson" as const,
       permissions: ids([
         "dashboard:view",
         "shops:view",
@@ -128,6 +129,32 @@ export async function seedRoles(permissionIdByName: Map<string, string>): Promis
         "orders:update",
         "deliveries:view",
         "products:view",
+        "field_operations:view",
+      ]),
+    },
+    {
+      name: "Manager",
+      slug: "manager",
+      description:
+        "Field managers: the shop's 'Handled by'. Takes orders, delivers and collects payments from their shops",
+      isSystem: false,
+      handlesShops: true,
+      fieldRole: "manager" as const,
+      permissions: ids([
+        "dashboard:view",
+        "shops:view",
+        "shop_areas:view",
+        "orders:view",
+        "orders:create",
+        "orders:update",
+        "orders:manage",
+        "deliveries:view",
+        "payments:view",
+        "products:view",
+        "bills:view",
+        "bills:create",
+        "field_operations:view",
+        "field_operations:create",
       ]),
     },
     {

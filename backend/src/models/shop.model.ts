@@ -60,6 +60,17 @@ export interface IShop {
   handled_by: string | null;
   /** The user account behind `handled_by`, when the handler has one. */
   handled_by_user_id: string | null;
+  /** Display name of the shop's salesperson, denormalized like `handled_by`. */
+  salesperson: string | null;
+  /** The salesperson account behind `salesperson`. */
+  salesperson_user_id: string | null;
+  /**
+   * Managers and salespersons granted access to this shop on top of its own
+   * handler/salesperson ("Give Access" on their dashboards). A field user sees
+   * a shop in Field Operations when they are its handler, its salesperson, or
+   * listed here.
+   */
+  access_user_ids: string[];
   joined_on: string | null;
   is_active: boolean;
   created_at?: Date;
@@ -83,6 +94,9 @@ const shopSchema = new Schema<IShop>(
     mobile: { type: String, default: null, trim: true },
     handled_by: { type: String, default: null, trim: true },
     handled_by_user_id: { type: String, ref: "User", default: null },
+    salesperson: { type: String, default: null, trim: true },
+    salesperson_user_id: { type: String, ref: "User", default: null },
+    access_user_ids: { type: [String], ref: "User", default: [] },
     joined_on: { type: String, default: null, match: ISO_DATE_MATCH },
     is_active: { type: Boolean, default: true },
   },
@@ -94,6 +108,8 @@ shopSchema.index({ area_id: 1 });
 shopSchema.index({ shop_name: 1 });
 shopSchema.index({ latitude: 1, longitude: 1 });
 shopSchema.index({ handled_by_user_id: 1 });
+shopSchema.index({ salesperson_user_id: 1 });
+shopSchema.index({ access_user_ids: 1 });
 
 export const Shop = model<IShop>("Shop", shopSchema, "shops");
 

@@ -12,6 +12,7 @@ import {
   costRouter,
   dashboardRouter,
   deliveryRouter,
+  fieldOpsRouter,
   importRouter,
   labelOrderRouter,
   labelProductRouter,
@@ -21,6 +22,7 @@ import {
   productRouter,
   shopAreaRouter,
   shopRouter,
+  teamRouter,
 } from "./domain.routes.js";
 import { permissionRouter, roleRouter, userRouter } from "./rbac.routes.js";
 
@@ -70,5 +72,7 @@ router.use("/cash-position", cashPositionRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/bills", billRouter);
 router.use("/import", importRouter);
+router.use("/field-ops", fieldOpsRouter);
+router.use("/team", teamRouter);
 
 export default router;

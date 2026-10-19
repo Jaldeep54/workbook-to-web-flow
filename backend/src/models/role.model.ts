@@ -18,6 +18,15 @@ export function slugifyRoleName(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/**
+ * Which field team a role's members belong to. Managers and salespersons each
+ * get their own dashboard (Manager Dashboard / Salesperson Dashboard), and in
+ * Field Operations a member only sees the shops assigned to them. `null` is
+ * everybody else — office staff, who see every shop.
+ */
+export const FIELD_ROLES = ["manager", "salesperson"] as const;
+export type FieldRole = (typeof FIELD_ROLES)[number];
+
 export interface IRole {
   _id: string;
   name: string;
@@ -34,6 +43,7 @@ export interface IRole {
    * administrator can rename or add sales roles without a code change.
    */
   handlesShops: boolean;
+  fieldRole: FieldRole | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -47,6 +57,7 @@ const roleSchema = new Schema<IRole>(
     permissions: { type: [String], ref: "Permission", default: [] },
     isSystem: { type: Boolean, default: false },
     handlesShops: { type: Boolean, default: false },
+    fieldRole: { type: String, enum: [...FIELD_ROLES, null], default: null },
   },
   platformSchemaOptions(),
 );

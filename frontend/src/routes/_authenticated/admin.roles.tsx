@@ -13,6 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -32,7 +39,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Can, RESOURCES } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
-import { permissionsApi, rolesApi, type ManagedRole } from "@/services/klinzo.service";
+import {
+  permissionsApi,
+  rolesApi,
+  type FieldRole,
+  type ManagedRole,
+} from "@/services/klinzo.service";
 
 export const Route = createFileRoute("/_authenticated/admin/roles")({
   component: RolesPage,
@@ -118,6 +130,24 @@ function RolesView() {
       );
       void qc.invalidateQueries({ queryKey: ["admin_roles"] });
       void qc.invalidateQueries({ queryKey: ["shop_handlers"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  /** Which field team a role's members join — the Manager or Salesperson Dashboard. */
+  const setFieldRole = useMutation({
+    mutationFn: ({ role, fieldRole }: { role: ManagedRole; fieldRole: FieldRole | null }) =>
+      rolesApi.update(role.id, { fieldRole }),
+    onSuccess: (role) => {
+      toast.success(
+        role.fieldRole
+          ? `${role.name} users now appear on the ${role.fieldRole === "manager" ? "Manager" : "Salesperson"} Dashboard`
+          : `${role.name} is no longer a field team role`,
+      );
+      void qc.invalidateQueries({ queryKey: ["admin_roles"] });
+      void qc.invalidateQueries({ queryKey: ["team"] });
+      void qc.invalidateQueries({ queryKey: ["shop_salespersons"] });
+      void qc.invalidateQueries({ queryKey: ["auth_me"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -226,6 +256,26 @@ function RolesView() {
             </div>
             <div className="flex items-center gap-2">
               <Can resource={RESOURCES.roles} action="update">
+                <Select
+                  value={selectedRole?.fieldRole ?? "none"}
+                  disabled={!selectedRole || setFieldRole.isPending}
+                  onValueChange={(v) =>
+                    selectedRole &&
+                    setFieldRole.mutate({
+                      role: selectedRole,
+                      fieldRole: v === "none" ? null : (v as FieldRole),
+                    })
+                  }
+                >
+                  <SelectTrigger className="h-8 w-[170px] text-xs" aria-label="Field role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Field role: none</SelectItem>
+                    <SelectItem value="manager">Field role: Manager</SelectItem>
+                    <SelectItem value="salesperson">Field role: Salesperson</SelectItem>
+                  </SelectContent>
+                </Select>
                 <label className="mr-2 flex cursor-pointer items-center gap-2 text-xs">
                   <Switch
                     checked={selectedRole?.handlesShops ?? false}

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { PERMISSION_ACTIONS } from "../models/permission.model.js";
+import { FIELD_ROLES } from "../models/role.model.js";
 import { passwordSchema } from "./auth.validator.js";
 import { idString, listQuery } from "./common.validator.js";
 
@@ -36,6 +37,8 @@ export const createRoleSchema = z.object({
   permissions: z.array(idString).max(500).optional().default([]),
   /** Members of this role appear in a shop's "Handled by" picker. */
   handlesShops: z.boolean().optional().default(false),
+  /** Puts the role's members on the Manager or Salesperson Dashboard. */
+  fieldRole: z.enum(FIELD_ROLES).nullish(),
 });
 
 export const updateRoleSchema = z
@@ -44,6 +47,7 @@ export const updateRoleSchema = z
     description: z.string().trim().max(300).optional(),
     permissions: z.array(idString).max(500).optional(),
     handlesShops: z.boolean().optional(),
+    fieldRole: z.enum(FIELD_ROLES).nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, "Provide at least one field to update");
 

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { ShopAreaFilter, shopLabel } from "@/components/filter-bar";
 import { ProductQtyGrid } from "@/components/product-qty-grid";
+import { ShopInfoDialog } from "@/components/shop-info";
 import { SearchableShopSelect } from "@/components/shop-select";
 import { ShopSalesIndicator } from "@/components/shop-sales-indicator";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,7 @@ export function NewOrderDialog({
   editing,
   lockedShopId,
   defaultAreaId,
+  allowedShopIds,
   onSaved,
 }: {
   open: boolean;
@@ -43,6 +46,8 @@ export function NewOrderDialog({
   lockedShopId?: string;
   /** Area the form opens on — the Orders page passes its own area filter through. */
   defaultAreaId?: string | null;
+  /** Limits the shop picker to these shops (Field Operations: the user's own shops). */
+  allowedShopIds?: ReadonlySet<string>;
   /** Called after a successful save, in addition to the standard query invalidation. */
   onSaved?: () => void;
 }) {
@@ -53,6 +58,7 @@ export function NewOrderDialog({
   const [deliveryDate, setDeliveryDate] = useState(todayISO());
   const [qty, setQty] = useState<QtyMap>({});
   const [notes, setNotes] = useState("");
+  const [shopInfoOpen, setShopInfoOpen] = useState(false);
 
   const { data: products = [] } = useQuery(productsQuery);
   const { data: shops = [] } = useQuery(shopsQuery);
@@ -203,15 +209,28 @@ export function NewOrderDialog({
                     onChange={setShopId}
                     areaId={areaFilter !== "all" ? areaFilter : null}
                     excludeShopIds={shopsAlreadyOrdered}
+                    onlyShopIds={allowedShopIds}
                     emptyMessage={`Every shop here already has an order on ${orderDate}.`}
                   />
                 </div>
               </div>
             )}
             {shopId && (
-              <p className="text-xs text-muted-foreground">
-                Area: {selectedShopAreaName ?? "Not Assigned"}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Area: {selectedShopAreaName ?? "Not Assigned"}
+                </p>
+                {/* Jumps straight to the shop's Orders / Deliveries / Payments /
+                    Shop Analysis, without leaving the order being typed. */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShopInfoOpen(true)}
+                >
+                  <Info className="size-4" /> Shop Info
+                </Button>
+              </div>
             )}
             {/* The picker hides clashing shops, but a locked shop can't be
                 swapped — say so here rather than failing at save. */}
@@ -267,6 +286,14 @@ export function NewOrderDialog({
             {editing ? "Save changes" : "Save order"}
           </Button>
         </DialogFooter>
+        <ShopInfoDialog
+          shopId={shopId || null}
+          shopName={
+            selectedShop ? shopLabel(selectedShop.shop_name, selectedShop.label_name) : null
+          }
+          open={shopInfoOpen}
+          onOpenChange={setShopInfoOpen}
+        />
       </DialogContent>
     </Dialog>
   );

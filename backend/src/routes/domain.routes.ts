@@ -6,18 +6,21 @@ import { RESOURCES } from "../config/permissions.js";
 import * as catalogue from "../controllers/catalogue.controller.js";
 import * as dashboard from "../controllers/dashboard.controller.js";
 import * as deliveries from "../controllers/delivery.controller.js";
+import * as fieldOps from "../controllers/field-ops.controller.js";
 import * as finance from "../controllers/finance.controller.js";
 import * as labels from "../controllers/label.controller.js";
 import * as misc from "../controllers/misc.controller.js";
 import * as orders from "../controllers/order.controller.js";
 import * as payments from "../controllers/payment.controller.js";
 import * as shops from "../controllers/shop.controller.js";
-import { authorize } from "../middleware/authorize.js";
+import * as team from "../controllers/team.controller.js";
+import { authorize, authorizeAny } from "../middleware/authorize.js";
 import { validate } from "../middleware/validate.js";
 import { asyncHandler } from "../utils/async-handler.js";
 import { idParam, listQuery } from "../validators/common.validator.js";
 import {
   billsSchema,
+  changeMoneyPaidSchema,
   costCreateSchema,
   costUpdateSchema,
   dashboardQuery,
@@ -25,12 +28,15 @@ import {
   deliverySheetQuery,
   deliveryUpdateSchema,
   dueDatesQuery,
+  fieldShopsQuery,
+  grantAccessSchema,
   investmentSchema,
   labelOrderBulkSchema,
   labelOrderCreateSchema,
   labelProductCreateSchema,
   labelProductUpdateSchema,
   labelSuggestionQuery,
+  makePaymentSchema,
   monthListQuery,
   orderCreateSchema,
   orderListQuery,
@@ -47,6 +53,12 @@ import {
   shopBodySchema,
   shopListQuery,
   shopUpdateSchema,
+  teamActivityQuery,
+  teamCollectionParams,
+  teamKindParams,
+  teamMemberParams,
+  teamShopParams,
+  teamShopsQuery,
 } from "../validators/domain.validator.js";
 
 const upload = multer({
@@ -68,6 +80,12 @@ shopRouter.get("/next-code", authorize(RESOURCES.shops, "create"), asyncHandler(
 shopRouter.get("/products", authorize(RESOURCES.shops, "view"), asyncHandler(shops.listShopProducts));
 /** People a shop can be "Handled by" — see the controller for who qualifies. */
 shopRouter.get("/handlers", authorize(RESOURCES.shops, "view"), asyncHandler(shops.listShopHandlers));
+/** People a shop's "Salesperson" can be — users of salesperson roles. */
+shopRouter.get(
+  "/salespersons",
+  authorize(RESOURCES.shops, "view"),
+  asyncHandler(shops.listShopSalespersons),
+);
 shopRouter.post(
   "/",
   authorize(RESOURCES.shops, "create"),
@@ -80,15 +98,21 @@ shopRouter.get(
   validate({ params: idParam }),
   asyncHandler(shops.getShop),
 );
+/** Shop Info in Field Operations reads these two as well, hence either grant. */
+const shopInfoAccess = authorizeAny([
+  { resource: RESOURCES.shops, action: "view" },
+  { resource: RESOURCES.fieldOperations, action: "view" },
+]);
+
 shopRouter.get(
   "/:id/analysis",
-  authorize(RESOURCES.shops, "view"),
+  shopInfoAccess,
   validate({ params: idParam, query: shopAnalysisQuery }),
   asyncHandler(shops.getShopAnalysis),
 );
 shopRouter.get(
   "/:id/history",
-  authorize(RESOURCES.shops, "view"),
+  shopInfoAccess,
   validate({ params: idParam }),
   asyncHandler(shops.getShopHistory),
 );
@@ -459,6 +483,96 @@ dashboardRouter.get(
   "/sku-opportunity",
   authorize(RESOURCES.skuOpportunity, "view"),
   asyncHandler(dashboard.getSkuOpportunity),
+);
+
+/* -------------------------------------------------------- field operations */
+
+export const fieldOpsRouter = Router();
+
+fieldOpsRouter.get(
+  "/shops",
+  authorize(RESOURCES.fieldOperations, "view"),
+  validate({ query: fieldShopsQuery }),
+  asyncHandler(fieldOps.listFieldShops),
+);
+fieldOpsRouter.get(
+  "/collectors",
+  authorize(RESOURCES.fieldOperations, "view"),
+  asyncHandler(fieldOps.listFieldCollectors),
+);
+fieldOpsRouter.get(
+  "/shops/:id/pending",
+  authorize(RESOURCES.fieldOperations, "view"),
+  validate({ params: idParam }),
+  asyncHandler(fieldOps.getPendingPayments),
+);
+fieldOpsRouter.get(
+  "/shops/:id/collections",
+  authorize(RESOURCES.fieldOperations, "view"),
+  validate({ params: idParam }),
+  asyncHandler(fieldOps.listShopCollections),
+);
+/** Make Payment — applies the sum to pending deliveries, oldest first. */
+fieldOpsRouter.post(
+  "/shops/:id/collections",
+  authorize(RESOURCES.fieldOperations, "create"),
+  validate({ params: idParam, body: makePaymentSchema }),
+  asyncHandler(fieldOps.makePayment),
+);
+/** Reversing a collection rewrites payments, so it needs payments:update. */
+fieldOpsRouter.delete(
+  "/collections/:id",
+  authorize(RESOURCES.payments, "update"),
+  validate({ params: idParam }),
+  asyncHandler(fieldOps.deleteCollection),
+);
+
+/* ---------------------------------------- manager & salesperson dashboards */
+
+/** `:kind` is "managers" or "salespersons"; each is guarded by its own permission. */
+export const teamRouter = Router();
+
+teamRouter.get(
+  "/:kind",
+  validate({ params: teamKindParams }),
+  team.authorizeTeam("view"),
+  asyncHandler(team.listMembers),
+);
+teamRouter.patch(
+  "/:kind/change-money/:id",
+  validate({ params: teamCollectionParams, body: changeMoneyPaidSchema }),
+  team.authorizeTeam("update"),
+  asyncHandler(team.setChangeMoneyPaid),
+);
+teamRouter.get(
+  "/:kind/:userId",
+  validate({ params: teamMemberParams }),
+  team.authorizeTeam("view"),
+  asyncHandler(team.getMember),
+);
+teamRouter.get(
+  "/:kind/:userId/activity",
+  validate({ params: teamMemberParams, query: teamActivityQuery }),
+  team.authorizeTeam("view"),
+  asyncHandler(team.memberActivity),
+);
+teamRouter.get(
+  "/:kind/:userId/shops",
+  validate({ params: teamMemberParams, query: teamShopsQuery }),
+  team.authorizeTeam("view"),
+  asyncHandler(team.memberShops),
+);
+teamRouter.post(
+  "/:kind/:userId/shops",
+  validate({ params: teamMemberParams, body: grantAccessSchema }),
+  team.authorizeTeam("update"),
+  asyncHandler(team.grantShopAccess),
+);
+teamRouter.delete(
+  "/:kind/:userId/shops/:shopId",
+  validate({ params: teamShopParams }),
+  team.authorizeTeam("update"),
+  asyncHandler(team.revokeShopAccess),
 );
 
 /* ------------------------------------------------------- bills and imports */

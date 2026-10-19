@@ -22,6 +22,9 @@ export const shopBodySchema = z.object({
   handled_by: z.string().trim().max(120).nullish(),
   /** When set, the API overwrites `handled_by` with that user's name. */
   handled_by_user_id: idString.nullish(),
+  salesperson: z.string().trim().max(120).nullish(),
+  /** When set, the API overwrites `salesperson` with that user's name. */
+  salesperson_user_id: idString.nullish(),
   joined_on: isoDate.nullish(),
   is_active: z.boolean().default(true),
   /** Products the shop works with — at least one, as the UI requires. */
@@ -261,4 +264,57 @@ export const shopAnalysisQuery = z.object({
 
 export const billsSchema = z.object({
   orderIds: z.array(idString).min(1, "Select at least one order").max(200),
+});
+
+/* -------------------------------------------------------- field operations */
+
+export const fieldShopsQuery = z.object({ areaId: areaFilter });
+
+export const makePaymentSchema = z.object({
+  collection_date: isoDate.optional(),
+  amount: z.coerce.number().positive("Collection amount must be greater than zero"),
+  change_money: z.coerce.number().min(0, "Change money cannot be negative").default(0),
+  /** Defaults to the signed-in user. */
+  collected_by_user_id: idString.nullish(),
+});
+
+/* ---------------------------------------------- manager/salesperson dashboards */
+
+const teamKind = z.enum(["managers", "salespersons"]);
+
+export const teamKindParams = z.object({ kind: teamKind });
+export const teamMemberParams = z.object({ kind: teamKind, userId: idString });
+export const teamShopParams = z.object({ kind: teamKind, userId: idString, shopId: idString });
+export const teamCollectionParams = z.object({ kind: teamKind, id: idString });
+
+export const teamActivityQuery = z.object({
+  type: z.enum(["orders", "deliveries", "collections", "change_money"]),
+  date: isoDate.optional(),
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}(-01)?$/, "Expected a month in YYYY-MM form")
+    .optional(),
+  year: z.string().regex(/^\d{4}$/, "Expected a 4-digit year").optional(),
+  shopId: shopFilter,
+  areaId: areaFilter,
+});
+
+export const teamShopsQuery = z.object({
+  areaId: areaFilter,
+  /** `false` lists every active shop, for the Give Access picker. */
+  assigned: z.enum(["true", "false"]).optional(),
+});
+
+export const grantAccessSchema = z
+  .object({
+    shop_ids: z.array(idString).max(2000).optional(),
+    /** Give Access to All — every active shop, or every shop in `area_id`. */
+    all: z.boolean().optional(),
+    area_id: idString.nullish(),
+  })
+  .refine((body) => body.all || (body.shop_ids?.length ?? 0) > 0, "Select at least one shop");
+
+export const changeMoneyPaidSchema = z.object({
+  paid: z.boolean(),
+  paid_date: isoDate.optional(),
 });

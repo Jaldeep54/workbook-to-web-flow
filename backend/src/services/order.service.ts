@@ -93,6 +93,9 @@ export async function nextOrderNo(
   return (latest?.order_no ?? 0) + 1;
 }
 
+/** The signed-in user behind a status change, recorded as who delivered. */
+export type Actor = { id: string; fullName: string };
+
 /**
  * Creates or refreshes the delivery + payment pair for an order and marks the
  * order delivered. Re-runnable: editing a delivered order re-runs this and the
@@ -101,8 +104,16 @@ export async function nextOrderNo(
  * A payment already settled in full keeps its amount (the money really did
  * arrive); anything else is re-synced to the new sales figure, carrying any
  * part payment already collected across untouched.
+ *
+ * `actor` is passed when a person marks the order delivered (Delivery Sheet,
+ * New delivery) and recorded as who delivered it. Re-syncs after an order edit
+ * pass none, so editing an order never changes who delivered it.
  */
-export async function setOrderDelivered(orderId: string, deliveryDate: string): Promise<string> {
+export async function setOrderDelivered(
+  orderId: string,
+  deliveryDate: string,
+  actor?: Actor | null,
+): Promise<string> {
   const order = await Order.findById(orderId).lean();
   if (!order) throw ApiError.notFound("Order not found");
 
@@ -122,6 +133,7 @@ export async function setOrderDelivered(orderId: string, deliveryDate: string): 
         status: "Delivered",
         delivery_lines: lines,
         ...totals,
+        ...(actor ? { delivered_by: actor.fullName, delivered_by_user_id: actor.id } : {}),
       },
     },
     { new: true, upsert: true, setDefaultsOnInsert: true },
@@ -178,13 +190,14 @@ export async function setOrderStatus(
   orderId: string,
   status: OrderStatus,
   deliveryDate?: string | null,
+  actor?: Actor | null,
 ): Promise<void> {
   const order = await Order.findById(orderId).lean();
   if (!order) throw ApiError.notFound("Order not found");
 
   if (status === "Delivered") {
     const date = deliveryDate ?? order.delivery_date ?? order.order_date ?? todayIso();
-    await setOrderDelivered(orderId, date);
+    await setOrderDelivered(orderId, date, actor);
     return;
   }
 

@@ -53,7 +53,13 @@ async function sessionPayload(userId: string) {
     isActive: user.isActive,
     lastLoginAt: user.lastLoginAt,
     role: role
-      ? { id: role._id, name: role.name, slug: role.slug, isSystem: role.isSystem }
+      ? {
+          id: role._id,
+          name: role.name,
+          slug: role.slug,
+          isSystem: role.isSystem,
+          fieldRole: role.fieldRole ?? null,
+        }
       : null,
     /** Flat `resource:action` list — the frontend gates its UI on this. */
     permissions: Array.from(permissions).sort(),

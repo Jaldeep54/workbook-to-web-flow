@@ -1,5 +1,7 @@
 import { api, apiRequest, setAccessToken } from "./api-client";
 
+export type FieldRole = "manager" | "salesperson";
+
 /** The session shape the whole app reads its identity and permissions from. */
 export type AuthUser = {
   id: string;
@@ -7,7 +9,14 @@ export type AuthUser = {
   fullName: string;
   isActive: boolean;
   lastLoginAt: string | null;
-  role: { id: string; name: string; slug: string; isSystem: boolean } | null;
+  role: {
+    id: string;
+    name: string;
+    slug: string;
+    isSystem: boolean;
+    /** Puts the user on a field team — Field Operations then shows only their shops. */
+    fieldRole?: FieldRole | null;
+  } | null;
   /** Flat `resource:action` grants, already merged from role + direct grants. */
   permissions: string[];
 };

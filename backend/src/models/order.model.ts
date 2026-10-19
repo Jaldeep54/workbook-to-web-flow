@@ -39,6 +39,9 @@ export interface IOrder {
   total_qty: number;
   notes: string | null;
   order_lines: ProductLine[];
+  /** Who recorded the order — "Orders Taken" on the field dashboards. */
+  taken_by: string | null;
+  taken_by_user_id: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -63,10 +66,13 @@ const orderSchema = new Schema<IOrder>(
     total_qty: { type: Number, default: 0, min: 0 },
     notes: { type: String, default: null, maxlength: 500 },
     order_lines: { type: [productLineSchema], default: [] },
+    taken_by: { type: String, default: null, trim: true },
+    taken_by_user_id: { type: String, ref: "User", default: null },
   },
   schemaOptions(),
 );
 
+orderSchema.index({ taken_by_user_id: 1, order_date: -1 });
 orderSchema.index({ shop_id: 1, order_no: 1 }, { unique: true });
 orderSchema.index({ month: 1, order_date: -1 });
 orderSchema.index({ delivery_date: 1 });
@@ -97,6 +103,9 @@ export interface IDelivery {
   total_fixed_cost: number;
   profit: number;
   delivery_lines: ProductLine[];
+  /** Who marked the order delivered — "Deliveries Done" on the Manager Dashboard. */
+  delivered_by: string | null;
+  delivered_by_user_id: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -117,9 +126,13 @@ const deliverySchema = new Schema<IDelivery>(
     total_fixed_cost: { type: Number, default: 0 },
     profit: { type: Number, default: 0 },
     delivery_lines: { type: [productLineSchema], default: [] },
+    delivered_by: { type: String, default: null, trim: true },
+    delivered_by_user_id: { type: String, ref: "User", default: null },
   },
   schemaOptions(),
 );
+
+deliverySchema.index({ delivered_by_user_id: 1, delivery_date: -1 });
 
 deliverySchema.index({ month: 1, delivery_date: -1 });
 deliverySchema.index({ shop_id: 1, delivery_date: -1 });

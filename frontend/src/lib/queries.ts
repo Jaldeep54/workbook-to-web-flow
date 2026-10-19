@@ -4,6 +4,7 @@ import { LABEL_SUGGESTION_HISTORY_MONTHS, SHOP_ANALYSIS_MONTHS } from "./domain"
 import {
   cashPositionApi,
   dashboardApi,
+  fieldOpsApi,
   labelProductsApi,
   labelStockApi,
   productsApi,
@@ -48,6 +49,23 @@ export const shopHandlersQuery = queryOptions({
   queryKey: ["shop_handlers"],
   staleTime: 60 * 1000,
   queryFn: () => shopsApi.handlers(),
+});
+
+/** The people a shop's "Salesperson" can be — active users of salesperson roles. */
+export const shopSalespersonsQuery = queryOptions({
+  queryKey: ["shop_salespersons"],
+  staleTime: 60 * 1000,
+  queryFn: () => shopsApi.salespersons(),
+});
+
+/**
+ * The shops the signed-in user works in Field Operations — their own when on
+ * a field team, every active shop for office staff.
+ */
+export const fieldShopsQuery = queryOptions({
+  queryKey: ["field_shops"],
+  staleTime: 60 * 1000,
+  queryFn: () => fieldOpsApi.shops(),
 });
 
 /** Which of the products each shop works with. */

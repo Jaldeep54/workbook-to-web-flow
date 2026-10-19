@@ -26,6 +26,9 @@ export const RESOURCES = {
   reports: "reports",
   skuOpportunity: "sku_opportunity",
   bills: "bills",
+  fieldOperations: "field_operations",
+  managerDashboard: "manager_dashboard",
+  salespersonDashboard: "salesperson_dashboard",
   imports: "imports",
   users: "users",
   roles: "roles",
@@ -149,6 +152,29 @@ export const PERMISSION_CATALOGUE: PermissionDefinition[] = [
     group: "Operations",
     description: "Invoice and delivery challan generation",
     actions: ["view", "create"],
+  },
+  {
+    resource: RESOURCES.fieldOperations,
+    label: "Field Operations",
+    group: "Field Team",
+    description:
+      "Mobile field tab: assigned shops, delivery sheet, new orders and cash collection (create = Make Payment)",
+    actions: ["view", "create"],
+  },
+  {
+    resource: RESOURCES.managerDashboard,
+    label: "Manager Dashboard",
+    group: "Field Team",
+    description:
+      "Each manager's orders, deliveries, collections and change money (update = give shop access, mark change money paid)",
+    actions: ["view", "update"],
+  },
+  {
+    resource: RESOURCES.salespersonDashboard,
+    label: "Salesperson Dashboard",
+    group: "Field Team",
+    description: "Each salesperson's orders and deliveries (update = assign shops)",
+    actions: ["view", "update"],
   },
   {
     resource: RESOURCES.imports,

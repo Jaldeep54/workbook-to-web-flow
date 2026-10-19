@@ -73,6 +73,7 @@ import {
   productsQuery,
   shopAreasQuery,
   shopHandlersQuery,
+  shopSalespersonsQuery,
   shopProductsQuery,
   shopsQuery,
 } from "@/lib/queries";
@@ -117,6 +118,7 @@ const emptyShop = {
   mobile: "",
   handled_by: "",
   handled_by_user_id: null as string | null,
+  salesperson_user_id: null as string | null,
   joined_on: "",
   is_active: true,
 };
@@ -186,6 +188,50 @@ function HandledBySelect({
           <SelectItem key={h.id} value={h.id}>
             {h.full_name}
             <span className="ml-2 text-xs text-muted-foreground">{h.role_name}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/**
+ * The shop's salesperson: an active user of a role whose field role is
+ * Salesperson (Admin → Roles & permissions). Optional — salespersons can also
+ * be given shops from the Salesperson Dashboard. A salesperson whose account
+ * has gone stays visible by name so an unrelated edit doesn't blank it.
+ */
+function SalespersonSelect({
+  userId,
+  name,
+  onChange,
+}: {
+  userId: string | null;
+  name: string | null;
+  onChange: (userId: string | null) => void;
+}) {
+  const { data: people = [], isLoading } = useQuery(shopSalespersonsQuery);
+  const isCurrent = !!userId && people.some((p) => p.id === userId);
+  const retired = !isLoading && userId && !isCurrent ? (name ?? "Former salesperson") : null;
+
+  return (
+    <Select
+      value={isCurrent ? userId! : retired ? LEGACY_HANDLER : NO_HANDLER}
+      onValueChange={(v) => {
+        if (v === LEGACY_HANDLER) return;
+        onChange(v === NO_HANDLER ? null : v);
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={isLoading ? "Loading people…" : "Not assigned"} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NO_HANDLER}>Not assigned</SelectItem>
+        {retired && <SelectItem value={LEGACY_HANDLER}>{retired} — no active account</SelectItem>}
+        {people.map((p) => (
+          <SelectItem key={p.id} value={p.id}>
+            {p.full_name}
+            <span className="ml-2 text-xs text-muted-foreground">{p.role_name}</span>
           </SelectItem>
         ))}
       </SelectContent>
@@ -424,6 +470,7 @@ function ShopsPage() {
       mobile: shop.mobile ?? "",
       handled_by: shop.handled_by ?? "",
       handled_by_user_id: shop.handled_by_user_id ?? null,
+      salesperson_user_id: shop.salesperson_user_id ?? null,
       joined_on: shop.joined_on ?? "",
       is_active: shop.is_active,
     });
@@ -557,6 +604,14 @@ function ShopsPage() {
                   onChange={(next) => setForm({ ...form, ...next })}
                   handlers={handlers}
                   isLoading={handlersLoading}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Salesperson</Label>
+                <SalespersonSelect
+                  userId={form.salesperson_user_id}
+                  name={editing?.salesperson ?? null}
+                  onChange={(salesperson_user_id) => setForm({ ...form, salesperson_user_id })}
                 />
               </div>
               <Field
@@ -1000,6 +1055,7 @@ function ShopDetailsDialog({
               <Detail label="Bill name" value={shop.bill_name ?? "—"} />
               <Detail label="Mobile" value={shop.mobile ?? "—"} />
               <Detail label="Handled by" value={shop.handled_by ?? "—"} />
+              <Detail label="Salesperson" value={shop.salesperson ?? "—"} />
               <Detail label="Design type" value={String(shop.design_type)} />
               <Detail label="Joined on" value={dateLabel(shop.joined_on)} />
               <Detail label="Status" value={shop.is_active ? "Active" : "Inactive"} />

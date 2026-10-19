@@ -92,7 +92,7 @@ export async function createDelivery(req: Request, res: Response) {
     throw ApiError.conflict("This order already has a delivery recorded");
   }
 
-  await setOrderDelivered(orderId, deliveryDate);
+  await setOrderDelivered(orderId, deliveryDate, req.user);
   if (status !== "Delivered") await setOrderStatus(orderId, status, deliveryDate);
 
   const delivery = await Delivery.findOne({ order_id: orderId }).lean();
@@ -121,6 +121,7 @@ export async function updateDelivery(req: Request, res: Response) {
       delivery.order_id,
       body.status,
       body.delivery_date ?? delivery.delivery_date,
+      req.user,
     );
   } else if (body.delivery_date) {
     await setOrderDelivered(delivery.order_id, body.delivery_date);

@@ -72,7 +72,7 @@ function CashPositionPage() {
   const moneyInHand =
     (s?.investmentsTotal ?? 0) +
     (s?.paymentsReceivedTotal ?? 0) -
-    ((s?.variableCostsTotal ?? 0) + (s?.payoutsTotal ?? 0));
+    ((s?.variableCostsTotal ?? 0) + (s?.payoutsTotal ?? 0) + (s?.changeMoneyPaidTotal ?? 0));
 
   return (
     <>
@@ -85,7 +85,9 @@ function CashPositionPage() {
         <StatCard
           label="Money in hand"
           value={inr(moneyInHand)}
-          sub="Investments + Payments received − (Variable costs + Payouts)"
+          sub={`Investments + Payments received − (Variable costs + Payouts + Change money paid${
+            s?.changeMoneyPaidTotal ? ` ${inr(s.changeMoneyPaidTotal)}` : ""
+          })`}
           tone={moneyInHand >= 0 ? "positive" : "negative"}
         />
       </div>

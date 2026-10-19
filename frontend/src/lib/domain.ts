@@ -65,6 +65,11 @@ export type Shop = {
   handled_by: string | null;
   /** The user account behind `handled_by`, when the handler has one. */
   handled_by_user_id: string | null;
+  /** The shop's salesperson, kept by name like `handled_by`. */
+  salesperson?: string | null;
+  salesperson_user_id?: string | null;
+  /** Managers/salespersons given access on top of the two above. */
+  access_user_ids?: string[];
   joined_on: string | null;
   is_active: boolean;
 };

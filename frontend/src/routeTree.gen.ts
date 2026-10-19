@@ -16,12 +16,15 @@ import { Route as AuthenticatedCashPositionRouteImport } from './routes/_authent
 import { Route as AuthenticatedCostsRouteImport } from './routes/_authenticated/costs'
 import { Route as AuthenticatedDeliveriesRouteImport } from './routes/_authenticated/deliveries'
 import { Route as AuthenticatedDeliverySheetRouteImport } from './routes/_authenticated/delivery-sheet'
+import { Route as AuthenticatedFieldOpsRouteImport } from './routes/_authenticated/field-ops'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
+import { Route as AuthenticatedManagerDashboardRouteImport } from './routes/_authenticated/manager-dashboard'
 import { Route as AuthenticatedOrdersRouteImport } from './routes/_authenticated/orders'
 import { Route as AuthenticatedPaymentsRouteImport } from './routes/_authenticated/payments'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
+import { Route as AuthenticatedSalespersonDashboardRouteImport } from './routes/_authenticated/salesperson-dashboard'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedSkuOpportunityRouteImport } from './routes/_authenticated/sku-opportunity'
 import { Route as AuthenticatedAdminRolesRouteImport } from './routes/_authenticated/admin.roles'
@@ -66,6 +69,11 @@ const AuthenticatedDeliverySheetRoute =
     path: '/delivery-sheet',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedFieldOpsRoute = AuthenticatedFieldOpsRouteImport.update({
+  id: '/field-ops',
+  path: '/field-ops',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -76,6 +84,12 @@ const AuthenticatedLabelsRoute = AuthenticatedLabelsRouteImport.update({
   path: '/labels',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedManagerDashboardRoute =
+  AuthenticatedManagerDashboardRouteImport.update({
+    id: '/manager-dashboard',
+    path: '/manager-dashboard',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedOrdersRoute = AuthenticatedOrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
@@ -96,6 +110,12 @@ const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSalespersonDashboardRoute =
+  AuthenticatedSalespersonDashboardRouteImport.update({
+    id: '/salesperson-dashboard',
+    path: '/salesperson-dashboard',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -141,12 +161,15 @@ export interface FileRoutesByFullPath {
   '/costs': typeof AuthenticatedCostsRoute
   '/deliveries': typeof AuthenticatedDeliveriesRoute
   '/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
+  '/field-ops': typeof AuthenticatedFieldOpsRoute
   '/import': typeof AuthenticatedImportRoute
   '/labels': typeof AuthenticatedLabelsRoute
+  '/manager-dashboard': typeof AuthenticatedManagerDashboardRoute
   '/orders': typeof AuthenticatedOrdersRoute
   '/payments': typeof AuthenticatedPaymentsRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/reports': typeof AuthenticatedReportsRoute
+  '/salesperson-dashboard': typeof AuthenticatedSalespersonDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/sku-opportunity': typeof AuthenticatedSkuOpportunityRoute
   '/admin/roles': typeof AuthenticatedAdminRolesRoute
@@ -161,12 +184,15 @@ export interface FileRoutesByTo {
   '/costs': typeof AuthenticatedCostsRoute
   '/deliveries': typeof AuthenticatedDeliveriesRoute
   '/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
+  '/field-ops': typeof AuthenticatedFieldOpsRoute
   '/import': typeof AuthenticatedImportRoute
   '/labels': typeof AuthenticatedLabelsRoute
+  '/manager-dashboard': typeof AuthenticatedManagerDashboardRoute
   '/orders': typeof AuthenticatedOrdersRoute
   '/payments': typeof AuthenticatedPaymentsRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/reports': typeof AuthenticatedReportsRoute
+  '/salesperson-dashboard': typeof AuthenticatedSalespersonDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/sku-opportunity': typeof AuthenticatedSkuOpportunityRoute
   '/': typeof AuthenticatedIndexRoute
@@ -184,12 +210,15 @@ export interface FileRoutesById {
   '/_authenticated/costs': typeof AuthenticatedCostsRoute
   '/_authenticated/deliveries': typeof AuthenticatedDeliveriesRoute
   '/_authenticated/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
+  '/_authenticated/field-ops': typeof AuthenticatedFieldOpsRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
+  '/_authenticated/manager-dashboard': typeof AuthenticatedManagerDashboardRoute
   '/_authenticated/orders': typeof AuthenticatedOrdersRoute
   '/_authenticated/payments': typeof AuthenticatedPaymentsRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
+  '/_authenticated/salesperson-dashboard': typeof AuthenticatedSalespersonDashboardRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/sku-opportunity': typeof AuthenticatedSkuOpportunityRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
@@ -208,12 +237,15 @@ export interface FileRouteTypes {
     | '/costs'
     | '/deliveries'
     | '/delivery-sheet'
+    | '/field-ops'
     | '/import'
     | '/labels'
+    | '/manager-dashboard'
     | '/orders'
     | '/payments'
     | '/profile'
     | '/reports'
+    | '/salesperson-dashboard'
     | '/settings'
     | '/sku-opportunity'
     | '/admin/roles'
@@ -228,12 +260,15 @@ export interface FileRouteTypes {
     | '/costs'
     | '/deliveries'
     | '/delivery-sheet'
+    | '/field-ops'
     | '/import'
     | '/labels'
+    | '/manager-dashboard'
     | '/orders'
     | '/payments'
     | '/profile'
     | '/reports'
+    | '/salesperson-dashboard'
     | '/settings'
     | '/sku-opportunity'
     | '/'
@@ -250,12 +285,15 @@ export interface FileRouteTypes {
     | '/_authenticated/costs'
     | '/_authenticated/deliveries'
     | '/_authenticated/delivery-sheet'
+    | '/_authenticated/field-ops'
     | '/_authenticated/import'
     | '/_authenticated/labels'
+    | '/_authenticated/manager-dashboard'
     | '/_authenticated/orders'
     | '/_authenticated/payments'
     | '/_authenticated/profile'
     | '/_authenticated/reports'
+    | '/_authenticated/salesperson-dashboard'
     | '/_authenticated/settings'
     | '/_authenticated/sku-opportunity'
     | '/_authenticated/'
@@ -322,6 +360,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDeliverySheetRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/field-ops': {
+      id: '/_authenticated/field-ops'
+      path: '/field-ops'
+      fullPath: '/field-ops'
+      preLoaderRoute: typeof AuthenticatedFieldOpsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/import': {
       id: '/_authenticated/import'
       path: '/import'
@@ -334,6 +379,13 @@ declare module '@tanstack/react-router' {
       path: '/labels'
       fullPath: '/labels'
       preLoaderRoute: typeof AuthenticatedLabelsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/manager-dashboard': {
+      id: '/_authenticated/manager-dashboard'
+      path: '/manager-dashboard'
+      fullPath: '/manager-dashboard'
+      preLoaderRoute: typeof AuthenticatedManagerDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/orders': {
@@ -362,6 +414,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof AuthenticatedReportsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/salesperson-dashboard': {
+      id: '/_authenticated/salesperson-dashboard'
+      path: '/salesperson-dashboard'
+      fullPath: '/salesperson-dashboard'
+      preLoaderRoute: typeof AuthenticatedSalespersonDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/settings': {
@@ -421,12 +480,15 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCostsRoute: typeof AuthenticatedCostsRoute
   AuthenticatedDeliveriesRoute: typeof AuthenticatedDeliveriesRoute
   AuthenticatedDeliverySheetRoute: typeof AuthenticatedDeliverySheetRoute
+  AuthenticatedFieldOpsRoute: typeof AuthenticatedFieldOpsRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
+  AuthenticatedManagerDashboardRoute: typeof AuthenticatedManagerDashboardRoute
   AuthenticatedOrdersRoute: typeof AuthenticatedOrdersRoute
   AuthenticatedPaymentsRoute: typeof AuthenticatedPaymentsRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
+  AuthenticatedSalespersonDashboardRoute: typeof AuthenticatedSalespersonDashboardRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSkuOpportunityRoute: typeof AuthenticatedSkuOpportunityRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
@@ -442,12 +504,16 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCostsRoute: AuthenticatedCostsRoute,
   AuthenticatedDeliveriesRoute: AuthenticatedDeliveriesRoute,
   AuthenticatedDeliverySheetRoute: AuthenticatedDeliverySheetRoute,
+  AuthenticatedFieldOpsRoute: AuthenticatedFieldOpsRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
+  AuthenticatedManagerDashboardRoute: AuthenticatedManagerDashboardRoute,
   AuthenticatedOrdersRoute: AuthenticatedOrdersRoute,
   AuthenticatedPaymentsRoute: AuthenticatedPaymentsRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
+  AuthenticatedSalespersonDashboardRoute:
+    AuthenticatedSalespersonDashboardRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSkuOpportunityRoute: AuthenticatedSkuOpportunityRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,

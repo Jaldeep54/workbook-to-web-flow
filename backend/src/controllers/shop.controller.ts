@@ -41,6 +41,7 @@ export async function listShops(req: Request, res: Response) {
       { mobile: rx },
       { address: rx },
       { handled_by: rx },
+      { salesperson: rx },
     ];
   }
 
@@ -84,6 +85,22 @@ async function resolveHandler(body: Record<string, unknown>) {
   body.handled_by = user.fullName;
 }
 
+/** Same as `resolveHandler`, for the shop's salesperson. */
+async function resolveSalesperson(body: Record<string, unknown>) {
+  if (!("salesperson_user_id" in body)) return;
+
+  const userId = body.salesperson_user_id as string | null | undefined;
+  if (!userId) {
+    body.salesperson_user_id = null;
+    body.salesperson = null;
+    return;
+  }
+
+  const user = await User.findById(userId, { fullName: 1 }).lean();
+  if (!user) throw ApiError.badRequest("The selected salesperson no longer has an account");
+  body.salesperson = user.fullName;
+}
+
 async function syncShopProducts(shopId: string, productIds: string[]) {
   const existing = await ShopProduct.find({ shop_id: shopId }, { product_id: 1 }).lean();
   const current = new Set(existing.map((l) => l.product_id));
@@ -113,6 +130,7 @@ export async function createShop(req: Request, res: Response) {
     throw ApiError.badRequest("The selected shop area does not exist");
   }
   await resolveHandler(body);
+  await resolveSalesperson(body);
 
   const shop = await Shop.create(body);
   await syncShopProducts(shop._id, productIds);
@@ -137,6 +155,7 @@ export async function updateShop(req: Request, res: Response) {
     throw ApiError.badRequest("The selected shop area does not exist");
   }
   await resolveHandler(body);
+  await resolveSalesperson(body);
 
   shop.set(body);
   await shop.save();
@@ -191,6 +210,32 @@ export async function deleteShop(req: Request, res: Response) {
  */
 export async function listShopHandlers(_req: Request, res: Response) {
   const roles = await Role.find({ handlesShops: true }, { _id: 1, name: 1 }).lean();
+  if (roles.length === 0) return ok(res, []);
+
+  const roleName = new Map(roles.map((r) => [r._id, r.name]));
+  const users = await User.find(
+    { role: { $in: Array.from(roleName.keys()) }, isActive: true },
+    { fullName: 1, role: 1 },
+  )
+    .sort({ fullName: 1 })
+    .lean();
+
+  return ok(
+    res,
+    users.map((u) => ({
+      id: u._id,
+      full_name: u.fullName,
+      role_name: roleName.get(u.role) ?? "",
+    })),
+  );
+}
+
+/**
+ * The people a shop's "Salesperson" can be: active users of every role marked
+ * as a salesperson role (Admin → Roles → Field role).
+ */
+export async function listShopSalespersons(_req: Request, res: Response) {
+  const roles = await Role.find({ fieldRole: "salesperson" }, { _id: 1, name: 1 }).lean();
   if (roles.length === 0) return ok(res, []);
 
   const roleName = new Map(roles.map((r) => [r._id, r.name]));

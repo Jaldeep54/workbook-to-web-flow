@@ -150,6 +150,8 @@ export async function createOrder(req: Request, res: Response) {
     notes: body.notes || null,
     total_qty: round2(lines.reduce((sum, l) => sum + Number(l.qty), 0)),
     order_lines: lines,
+    taken_by: req.user?.fullName ?? null,
+    taken_by_user_id: req.user?.id ?? null,
   });
 
   const shops = await shopRefs([order.shop_id]);
@@ -198,7 +200,7 @@ export async function changeOrderStatus(req: Request, res: Response) {
     delivery_date?: string;
   };
 
-  await setOrderStatus(req.params.id, status, deliveryDate ?? null);
+  await setOrderStatus(req.params.id, status, deliveryDate ?? null, req.user);
 
   const order = await Order.findById(req.params.id).lean();
   const shops = await shopRefs([order!.shop_id]);

@@ -413,7 +413,10 @@ function ShopsPage() {
       setDetailsShop(null);
       void qc.invalidateQueries({ queryKey: ["shops"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      closeDelete();
+    },
   });
 
   const closeDelete = () => {
@@ -712,13 +715,16 @@ function ShopsPage() {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
+                <AlertDialogCancel disabled={archive.isPending}>Cancel</AlertDialogCancel>
+                {/* Use a plain Button here too — AlertDialogAction would close
+                    the dialog immediately, before the async mutation completes.
+                    The dialog is closed by closeDelete() inside onSuccess/onError. */}
+                <Button
                   disabled={archive.isPending}
                   onClick={() => deletingShop && archive.mutate(deletingShop)}
                 >
                   {archive.isPending ? "Deleting…" : "Yes, delete shop"}
-                </AlertDialogAction>
+                </Button>
               </AlertDialogFooter>
             </>
           ) : (

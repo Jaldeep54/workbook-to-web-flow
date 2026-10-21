@@ -34,7 +34,10 @@ export const labelProductsQuery = queryOptions({
 export const shopsQuery = queryOptions({
   queryKey: ["shops"],
   staleTime: 60 * 1000,
-  queryFn: () => shopsApi.list(),
+  // Only fetch active shops — deactivated shops are hidden from the main list.
+  // The UI describes delete as "hides it from active lists", so the list must
+  // actually filter on is_active to make a just-deleted shop disappear.
+  queryFn: () => shopsApi.list({ isActive: true }),
 });
 
 /** Shared across every page that filters or displays a shop's area. */

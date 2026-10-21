@@ -732,15 +732,12 @@ function ShopsPage() {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                {/* Step one of two — advance the dialog instead of closing it. */}
-                <AlertDialogAction
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setDeleteConfirmed(true);
-                  }}
-                >
+                {/* Step one of two — use a plain Button so the AlertDialog doesn't
+                    auto-close. AlertDialogAction closes the dialog via Radix's internal
+                    state, bypassing e.preventDefault(). */}
+                <Button onClick={() => setDeleteConfirmed(true)}>
                   Continue
-                </AlertDialogAction>
+                </Button>
               </AlertDialogFooter>
             </>
           )}

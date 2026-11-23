@@ -16,6 +16,7 @@ import { Route as AuthenticatedCashPositionRouteImport } from './routes/_authent
 import { Route as AuthenticatedCostsRouteImport } from './routes/_authenticated/costs'
 import { Route as AuthenticatedDeliveriesRouteImport } from './routes/_authenticated/deliveries'
 import { Route as AuthenticatedDeliverySheetRouteImport } from './routes/_authenticated/delivery-sheet'
+import { Route as AuthenticatedDirectSellingRouteImport } from './routes/_authenticated/direct-selling'
 import { Route as AuthenticatedFieldOpsRouteImport } from './routes/_authenticated/field-ops'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
@@ -67,6 +68,12 @@ const AuthenticatedDeliverySheetRoute =
   AuthenticatedDeliverySheetRouteImport.update({
     id: '/delivery-sheet',
     path: '/delivery-sheet',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedDirectSellingRoute =
+  AuthenticatedDirectSellingRouteImport.update({
+    id: '/direct-selling',
+    path: '/direct-selling',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedFieldOpsRoute = AuthenticatedFieldOpsRouteImport.update({
@@ -161,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/costs': typeof AuthenticatedCostsRoute
   '/deliveries': typeof AuthenticatedDeliveriesRoute
   '/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
+  '/direct-selling': typeof AuthenticatedDirectSellingRoute
   '/field-ops': typeof AuthenticatedFieldOpsRoute
   '/import': typeof AuthenticatedImportRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -184,6 +192,7 @@ export interface FileRoutesByTo {
   '/costs': typeof AuthenticatedCostsRoute
   '/deliveries': typeof AuthenticatedDeliveriesRoute
   '/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
+  '/direct-selling': typeof AuthenticatedDirectSellingRoute
   '/field-ops': typeof AuthenticatedFieldOpsRoute
   '/import': typeof AuthenticatedImportRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -210,6 +219,7 @@ export interface FileRoutesById {
   '/_authenticated/costs': typeof AuthenticatedCostsRoute
   '/_authenticated/deliveries': typeof AuthenticatedDeliveriesRoute
   '/_authenticated/delivery-sheet': typeof AuthenticatedDeliverySheetRoute
+  '/_authenticated/direct-selling': typeof AuthenticatedDirectSellingRoute
   '/_authenticated/field-ops': typeof AuthenticatedFieldOpsRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
@@ -237,6 +247,7 @@ export interface FileRouteTypes {
     | '/costs'
     | '/deliveries'
     | '/delivery-sheet'
+    | '/direct-selling'
     | '/field-ops'
     | '/import'
     | '/labels'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/costs'
     | '/deliveries'
     | '/delivery-sheet'
+    | '/direct-selling'
     | '/field-ops'
     | '/import'
     | '/labels'
@@ -285,6 +297,7 @@ export interface FileRouteTypes {
     | '/_authenticated/costs'
     | '/_authenticated/deliveries'
     | '/_authenticated/delivery-sheet'
+    | '/_authenticated/direct-selling'
     | '/_authenticated/field-ops'
     | '/_authenticated/import'
     | '/_authenticated/labels'
@@ -358,6 +371,13 @@ declare module '@tanstack/react-router' {
       path: '/delivery-sheet'
       fullPath: '/delivery-sheet'
       preLoaderRoute: typeof AuthenticatedDeliverySheetRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/direct-selling': {
+      id: '/_authenticated/direct-selling'
+      path: '/direct-selling'
+      fullPath: '/direct-selling'
+      preLoaderRoute: typeof AuthenticatedDirectSellingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/field-ops': {
@@ -480,6 +500,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCostsRoute: typeof AuthenticatedCostsRoute
   AuthenticatedDeliveriesRoute: typeof AuthenticatedDeliveriesRoute
   AuthenticatedDeliverySheetRoute: typeof AuthenticatedDeliverySheetRoute
+  AuthenticatedDirectSellingRoute: typeof AuthenticatedDirectSellingRoute
   AuthenticatedFieldOpsRoute: typeof AuthenticatedFieldOpsRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
@@ -504,6 +525,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCostsRoute: AuthenticatedCostsRoute,
   AuthenticatedDeliveriesRoute: AuthenticatedDeliveriesRoute,
   AuthenticatedDeliverySheetRoute: AuthenticatedDeliverySheetRoute,
+  AuthenticatedDirectSellingRoute: AuthenticatedDirectSellingRoute,
   AuthenticatedFieldOpsRoute: AuthenticatedFieldOpsRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,

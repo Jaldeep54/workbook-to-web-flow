@@ -12,6 +12,7 @@ import {
   costRouter,
   dashboardRouter,
   deliveryRouter,
+  directSaleRouter,
   fieldOpsRouter,
   importRouter,
   labelOrderRouter,
@@ -74,5 +75,6 @@ router.use("/bills", billRouter);
 router.use("/import", importRouter);
 router.use("/field-ops", fieldOpsRouter);
 router.use("/team", teamRouter);
+router.use("/direct-sales", directSaleRouter);
 
 export default router;

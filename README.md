@@ -82,6 +82,7 @@ Browser ── REST (JSON + Bearer token) ──▶ Express API ──▶ MongoD
 | Reorder suggestion (1-month / 2-month targets) | `services/label-stock.service.ts` |
 | Monthly KPIs, whole business or per area | `services/dashboard.service.ts` |
 | Shop vs. area performance | `services/shop-analysis.service.ts` |
+| Direct-sale totals, product breakdown and cash receipts | `controllers/direct-sale.controller.ts`, `services/cash-position.service.ts` |
 | Money in hand | `services/cash-position.service.ts` |
 
 ## Stack

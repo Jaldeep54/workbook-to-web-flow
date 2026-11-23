@@ -38,6 +38,7 @@ export const RESOURCES = {
   users: "users",
   roles: "roles",
   permissions: "permissions",
+  directSelling: "direct_selling",
 } as const;
 
 export function evaluate(

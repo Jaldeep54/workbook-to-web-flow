@@ -1,4 +1,5 @@
 import { Collection } from "../models/collection.model.js";
+import { DirectSale } from "../models/direct-sale.model.js";
 import { Investment, Payout, VariableCost } from "../models/finance.model.js";
 import { Payment } from "../models/order.model.js";
 import { round2 } from "../utils/date.js";
@@ -6,7 +7,7 @@ import { round2 } from "../utils/date.js";
 /**
  * Cash Position — all-time totals, never scoped to a month.
  *
- *   Money in hand = Investments + Payments received
+ *   Money in hand = Investments + Payments received + Direct sale payments
  *                   − (Variable costs + Payouts + Change money paid)
  *
  * Change money only counts once a manager has marked it paid on the Manager
@@ -21,6 +22,7 @@ export type CashPositionSummary = {
   investmentsByBhavin: number;
   investmentsByJaldeep: number;
   paymentsReceivedTotal: number;
+  directSalePaymentsTotal: number;
   variableCostsTotal: number;
   payoutsTotal: number;
   changeMoneyPaidTotal: number;
@@ -28,9 +30,15 @@ export type CashPositionSummary = {
 };
 
 async function total(
-  model: typeof Investment | typeof Payout | typeof VariableCost | typeof Payment | typeof Collection,
+  model:
+    | typeof Investment
+    | typeof Payout
+    | typeof VariableCost
+    | typeof Payment
+    | typeof Collection
+    | typeof DirectSale,
   filter: Record<string, unknown> = {},
-  field: "amount" | "amount_received" | "change_money" = "amount",
+  field: "amount" | "amount_received" | "change_money" | "payment_amount" = "amount",
 ): Promise<number> {
   const [row] = await (model as typeof Investment).aggregate<{ total: number }>([
     { $match: filter },
@@ -45,6 +53,7 @@ export async function cashPositionSummary(): Promise<CashPositionSummary> {
     byBhavin,
     byJaldeep,
     paymentsReceivedTotal,
+    directSalePaymentsTotal,
     variableCostsTotal,
     payoutsTotal,
     changeMoneyPaidTotal,
@@ -55,6 +64,7 @@ export async function cashPositionSummary(): Promise<CashPositionSummary> {
     // Every rupee actually collected, including instalments against bills
     // that are still only part paid.
     total(Payment, {}, "amount_received"),
+    total(DirectSale, {}, "payment_amount"),
     total(VariableCost),
     total(Payout),
     total(Collection, { change_money_paid: true }, "change_money"),
@@ -65,12 +75,14 @@ export async function cashPositionSummary(): Promise<CashPositionSummary> {
     investmentsByBhavin: byBhavin,
     investmentsByJaldeep: byJaldeep,
     paymentsReceivedTotal,
+    directSalePaymentsTotal,
     variableCostsTotal,
     payoutsTotal,
     changeMoneyPaidTotal,
     moneyInHand: round2(
       investmentsTotal +
-        paymentsReceivedTotal -
+        paymentsReceivedTotal +
+        directSalePaymentsTotal -
         (variableCostsTotal + payoutsTotal + changeMoneyPaidTotal),
     ),
   };

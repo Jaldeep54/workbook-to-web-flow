@@ -4,6 +4,7 @@ import { LABEL_SUGGESTION_HISTORY_MONTHS, SHOP_ANALYSIS_MONTHS } from "./domain"
 import {
   cashPositionApi,
   dashboardApi,
+  directSalesApi,
   fieldOpsApi,
   labelProductsApi,
   labelStockApi,
@@ -193,3 +194,12 @@ export type {
 
 /** Kept for callers that still import the area-scoped summary type by name. */
 export type { DashboardSummary as DashboardSummaryByArea } from "@/services/klinzo.service";
+
+export const directSalesQuery = (
+  params: { month?: string; fromDate?: string; toDate?: string; soldBy?: string } = {},
+) =>
+  queryOptions({
+    queryKey: ["direct_sales", params],
+    queryFn: () => directSalesApi.list(params),
+    staleTime: 30 * 1000,
+  });

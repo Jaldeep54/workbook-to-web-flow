@@ -9,3 +9,4 @@ export * from "./shop.model.js";
 export * from "./order.model.js";
 export * from "./finance.model.js";
 export * from "./collection.model.js";
+export * from "./direct-sale.model.js";

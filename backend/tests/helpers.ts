@@ -56,6 +56,7 @@ export async function clearDomainCollections(): Promise<void> {
     "variable_costs",
     "investments",
     "payouts",
+    "direct_sales",
     "invoices",
     "counters",
   ];

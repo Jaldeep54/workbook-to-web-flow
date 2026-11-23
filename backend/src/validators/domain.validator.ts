@@ -318,3 +318,39 @@ export const changeMoneyPaidSchema = z.object({
   paid: z.boolean(),
   paid_date: isoDate.optional(),
 });
+
+/* -------------------------------------------------------- direct selling */
+
+export const directSaleCreateSchema = z.object({
+  product_id: idString,
+  product_name: z.string().trim().min(1),
+  sold_by: z.string().trim().min(1),
+  sold_date: isoDate,
+  quantity: z.coerce.number().int().min(1),
+  selling_price: z.coerce.number().min(0),
+  production_cost: z.coerce.number().min(0),
+  label_cost: z.coerce.number().min(0),
+  jar_pouch_cost: z.coerce.number().min(0),
+  payment_amount: z.coerce.number().min(0).default(0),
+  payment_status: z.enum(["paid", "partial", "unpaid"]).default("unpaid"),
+});
+
+export const directSaleUpdateSchema = directSaleCreateSchema.partial().refine(
+  (body) => Object.keys(body).length > 0,
+  "Provide at least one field to update",
+);
+
+export const directSaleListQuery = z.object({
+  month: monthString.optional(),
+  fromDate: isoDate.optional(),
+  toDate: isoDate.optional(),
+  soldBy: z.string().trim().max(120).optional(),
+})
+  .refine(
+    (query) => !(query.month && (query.fromDate || query.toDate)),
+    "Use either a month or a date range, not both",
+  )
+  .refine(
+    (query) => !query.fromDate || !query.toDate || query.fromDate <= query.toDate,
+    { message: "fromDate cannot be after toDate", path: ["fromDate"] },
+  );

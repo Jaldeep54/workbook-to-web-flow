@@ -316,9 +316,22 @@ discard the rest of the batch.
 | GET | `/cash-position/payouts` | `cash_position:view` |
 | POST | `/cash-position/payouts` | `cash_position:create` |
 | DELETE | `/cash-position/payouts/:id` | `cash_position:delete` |
+| GET | `/direct-sales` | `direct_selling:view` |
+| POST | `/direct-sales` | `direct_selling:create` |
+| PATCH | `/direct-sales/:id` | `direct_selling:update` |
+| DELETE | `/direct-sales/:id` | `direct_selling:delete` |
+
+Direct-sale list filters are `month=YYYY-MM-01` or the inclusive date range
+`fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD` (not both), plus `soldBy` for a
+case-insensitive seller-name search. The list includes filtered `rows`, total
+sales and profit in `summary`, and product totals in `byProduct`. Sale amounts
+and costs are stored on each record; product rates prefill new entries in the
+web app, and the profit is recalculated from those saved amounts.
 
 `/cash-position/summary` returns all-time totals plus
-`moneyInHand = investments + payments received − (variable costs + payouts)`.
+`moneyInHand = investments + payments received + direct-sale payments received
+− (variable costs + payouts + change money paid)`. The
+`directSalePaymentsTotal` field is the sum of direct-sale `payment_amount`.
 
 ## Dashboard and reports
 

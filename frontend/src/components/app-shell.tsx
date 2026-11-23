@@ -20,6 +20,7 @@ import {
   Smartphone,
   UserCog,
   UserCheck,
+  ShoppingBag,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
@@ -66,6 +67,12 @@ const NAV: Array<{
   },
   { to: "/deliveries", label: "Deliveries", icon: Truck, resource: RESOURCES.deliveries },
   { to: "/payments", label: "Payments", icon: CreditCard, resource: RESOURCES.payments },
+  {
+    to: "/direct-selling",
+    label: "Direct Selling",
+    icon: ShoppingBag,
+    resource: RESOURCES.directSelling,
+  },
   { to: "/labels", label: "Labels & stock", icon: Boxes, resource: RESOURCES.labelStock },
   { to: "/costs", label: "Variable costs", icon: Receipt, resource: RESOURCES.costs },
   { to: "/cash-position", label: "Cash Position", icon: Wallet, resource: RESOURCES.cashPosition },

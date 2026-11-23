@@ -346,6 +346,7 @@ export type CashPositionSummary = {
   payoutsTotal: number;
   /** Change money marked paid on the Manager Dashboard — leaves cash in hand. */
   changeMoneyPaidTotal: number;
+  directSalePaymentsTotal: number;
   moneyInHand: number;
 };
 
@@ -830,6 +831,52 @@ export const permissionsApi = {
     group?: string;
   }) => api.post<PermissionRow>("/permissions", payload),
   remove: (id: string) => api.delete<{ message: string }>(`/permissions/${id}`),
+};
+
+/** Escape hatch for one-off calls; prefer a named function above. */
+
+/* -------------------------------------------------------- direct selling */
+
+export type DirectSale = {
+  id: string;
+  product_id: string;
+  product_name: string;
+  sold_by: string;
+  sold_date: string;
+  month: string | null;
+  quantity: number;
+  selling_price: number;
+  production_cost: number;
+  label_cost: number;
+  jar_pouch_cost: number;
+  profit: number;
+  payment_amount: number;
+  payment_status: "paid" | "partial" | "unpaid";
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type DirectSaleProductBreakdown = {
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  total_sales: number;
+  total_profit: number;
+};
+
+export type DirectSaleListResult = {
+  rows: DirectSale[];
+  summary: { totalSales: number; totalProfit: number };
+  byProduct: DirectSaleProductBreakdown[];
+};
+
+export const directSalesApi = {
+  list: (params: { month?: string; fromDate?: string; toDate?: string; soldBy?: string } = {}) =>
+    api.get<DirectSaleListResult>("/direct-sales", params),
+  create: (payload: Record<string, unknown>) => api.post<DirectSale>("/direct-sales", payload),
+  update: (id: string, payload: Record<string, unknown>) =>
+    api.patch<DirectSale>(`/direct-sales/${id}`, payload),
+  remove: (id: string) => api.delete<{ message: string }>(`/direct-sales/${id}`),
 };
 
 /** Escape hatch for one-off calls; prefer a named function above. */

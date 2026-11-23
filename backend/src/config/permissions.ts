@@ -33,6 +33,7 @@ export const RESOURCES = {
   users: "users",
   roles: "roles",
   permissions: "permissions",
+  directSelling: "direct_selling",
 } as const;
 
 export type Resource = (typeof RESOURCES)[keyof typeof RESOURCES];
@@ -203,5 +204,12 @@ export const PERMISSION_CATALOGUE: PermissionDefinition[] = [
     group: "Administration",
     description: "The list of permissions roles can be built from",
     actions: ["view", "create", "delete"],
+  },
+  {
+    resource: RESOURCES.directSelling,
+    label: "Direct Selling",
+    group: "Operations",
+    description: "Direct cash sales — product, cost, payment and profit tracking",
+    actions: [...CRUD],
   },
 ];

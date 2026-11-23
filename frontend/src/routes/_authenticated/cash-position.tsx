@@ -71,7 +71,8 @@ function CashPositionPage() {
   const s = summary.data;
   const moneyInHand =
     (s?.investmentsTotal ?? 0) +
-    (s?.paymentsReceivedTotal ?? 0) -
+    (s?.paymentsReceivedTotal ?? 0) +
+    (s?.directSalePaymentsTotal ?? 0) -
     ((s?.variableCostsTotal ?? 0) + (s?.payoutsTotal ?? 0) + (s?.changeMoneyPaidTotal ?? 0));
 
   return (
@@ -85,7 +86,7 @@ function CashPositionPage() {
         <StatCard
           label="Money in hand"
           value={inr(moneyInHand)}
-          sub={`Investments + Payments received − (Variable costs + Payouts + Change money paid${
+          sub={`Investments + Payments received + Direct sales − (Variable costs + Payouts + Change money paid${
             s?.changeMoneyPaidTotal ? ` ${inr(s.changeMoneyPaidTotal)}` : ""
           })`}
           tone={moneyInHand >= 0 ? "positive" : "negative"}
@@ -108,6 +109,18 @@ function CashPositionPage() {
           <PayoutsSection total={s?.payoutsTotal ?? 0} />
         </TabsContent>
       </Tabs>
+
+      {/* Direct selling contribution to cash in hand */}
+      {(s?.directSalePaymentsTotal ?? 0) > 0 && (
+        <div className="mt-4">
+          <StatCard
+            label="Direct sale payments received"
+            value={inr(s?.directSalePaymentsTotal ?? 0)}
+            sub="Sum of payment amounts recorded in Direct Selling — already included in Money in hand"
+            tone="positive"
+          />
+        </div>
+      )}
     </>
   );
 }

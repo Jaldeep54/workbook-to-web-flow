@@ -6,6 +6,7 @@ import { RESOURCES } from "../config/permissions.js";
 import * as catalogue from "../controllers/catalogue.controller.js";
 import * as dashboard from "../controllers/dashboard.controller.js";
 import * as deliveries from "../controllers/delivery.controller.js";
+import * as directSales from "../controllers/direct-sale.controller.js";
 import * as fieldOps from "../controllers/field-ops.controller.js";
 import * as finance from "../controllers/finance.controller.js";
 import * as labels from "../controllers/label.controller.js";
@@ -27,6 +28,9 @@ import {
   deliveryCreateSchema,
   deliverySheetQuery,
   deliveryUpdateSchema,
+  directSaleCreateSchema,
+  directSaleListQuery,
+  directSaleUpdateSchema,
   dueDatesQuery,
   fieldShopsQuery,
   grantAccessSchema,
@@ -593,4 +597,33 @@ importRouter.post(
   authorize(RESOURCES.imports, "create"),
   upload.single("workbook"),
   asyncHandler(misc.uploadWorkbook),
+);
+
+/* -------------------------------------------------------- direct selling */
+
+export const directSaleRouter = Router();
+
+directSaleRouter.get(
+  "/",
+  authorize(RESOURCES.directSelling, "view"),
+  validate({ query: directSaleListQuery }),
+  asyncHandler(directSales.listDirectSales),
+);
+directSaleRouter.post(
+  "/",
+  authorize(RESOURCES.directSelling, "create"),
+  validate({ body: directSaleCreateSchema }),
+  asyncHandler(directSales.createDirectSale),
+);
+directSaleRouter.patch(
+  "/:id",
+  authorize(RESOURCES.directSelling, "update"),
+  validate({ params: idParam, body: directSaleUpdateSchema }),
+  asyncHandler(directSales.updateDirectSale),
+);
+directSaleRouter.delete(
+  "/:id",
+  authorize(RESOURCES.directSelling, "delete"),
+  validate({ params: idParam }),
+  asyncHandler(directSales.deleteDirectSale),
 );

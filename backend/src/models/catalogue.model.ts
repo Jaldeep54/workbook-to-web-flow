@@ -18,6 +18,7 @@ export interface IProduct {
   short_name: string;
   sort_order: number;
   selling_price: number;
+  direct_selling_price?: number;
   production_cost: number;
   packaging_cost: number;
   label_cost_per_unit: number;
@@ -36,6 +37,7 @@ const productSchema = new Schema<IProduct>(
     short_name: { type: String, required: true, trim: true },
     sort_order: { type: Number, required: true },
     selling_price: { type: Number, default: 0, min: 0 },
+    direct_selling_price: { type: Number, min: 0 },
     production_cost: { type: Number, default: 0, min: 0 },
     packaging_cost: { type: Number, default: 0, min: 0 },
     label_cost_per_unit: { type: Number, default: 0, min: 0 },

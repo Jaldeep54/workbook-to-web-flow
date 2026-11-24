@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { LabelProduct, Product } from "../models/catalogue.model.js";
+import { LabelProduct, Product, type IProduct } from "../models/catalogue.model.js";
 import { LabelOrder, Order } from "../models/order.model.js";
 import { ShopProduct } from "../models/shop.model.js";
 import { syncProductLabelCosts } from "../services/catalogue.service.js";
@@ -12,20 +12,32 @@ const strip = <T extends { _id: string }>(row: T) => {
   return { id: _id, ...rest };
 };
 
+const presentProduct = (product: IProduct) => ({
+  ...strip(product),
+  direct_selling_price: product.direct_selling_price ?? product.selling_price,
+});
+
 /* ---------------------------------------------------------------- products */
 
 export async function listProducts(_req: Request, res: Response) {
   const products = await Product.find().sort({ sort_order: 1 }).lean();
-  return ok(res, products.map(strip));
+  return ok(res, products.map(presentProduct));
 }
 
 export async function createProduct(req: Request, res: Response) {
-  const body = req.body as { key: string };
+  const body = req.body as {
+    key: string;
+    selling_price?: number;
+    direct_selling_price?: number;
+  };
   if (await Product.exists({ key: body.key })) {
     throw ApiError.conflict(`A product with key "${body.key}" already exists`);
   }
-  const product = await Product.create(body);
-  return created(res, strip(product.toObject()));
+  const product = await Product.create({
+    ...body,
+    direct_selling_price: body.direct_selling_price ?? body.selling_price ?? 0,
+  });
+  return created(res, presentProduct(product.toObject()));
 }
 
 /**
@@ -38,7 +50,7 @@ export async function updateProduct(req: Request, res: Response) {
 
   product.set(req.body as Record<string, unknown>);
   await product.save();
-  return ok(res, strip(product.toObject()));
+  return ok(res, presentProduct(product.toObject()));
 }
 
 export async function deleteProduct(req: Request, res: Response) {

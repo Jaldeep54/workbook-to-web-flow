@@ -19,6 +19,7 @@ export type Product = {
   short_name: string;
   sort_order: number;
   selling_price: number;
+  direct_selling_price: number;
   production_cost: number;
   packaging_cost: number;
   /**

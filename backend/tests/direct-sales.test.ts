@@ -25,6 +25,12 @@ describe("Direct sales", () => {
   afterAll(stopTestServer);
 
   it("filters by month, seller text and till-date, and includes received payments in cash", async () => {
+    const updatedProduct = await admin
+      .patch(`/products/${productId}`)
+      .send({ direct_selling_price: 100 });
+    expect(updatedProduct.body.data.direct_selling_price).toBe(100);
+    expect(updatedProduct.body.data.selling_price).toBe(95);
+
     const sale = (
       sold_by: string,
       sold_date: string,
@@ -55,9 +61,12 @@ describe("Direct sales", () => {
     const august = await admin.get("/direct-sales?month=2026-08-01");
     expect(august.status).toBe(200);
     expect(august.body.data.rows).toHaveLength(2);
+    expect(august.body.data.rows.map((row: { selling_price: number }) => row.selling_price)).toEqual([
+      100, 100,
+    ]);
     expect(august.body.data.summary).toEqual({
-      totalSales: 250,
-      totalProfit: 120,
+      totalSales: 200,
+      totalProfit: 70,
     });
 
     const filtered = await admin.get(
@@ -71,6 +80,38 @@ describe("Direct sales", () => {
     const cash = await admin.get("/cash-position/summary");
     expect(cash.body.data.directSalePaymentsTotal).toBe(310);
     expect(cash.body.data.moneyInHand).toBe(310);
+  });
+
+  it("uses the configured direct-selling rate even if the request submits another price", async () => {
+    const updatedProduct = await admin
+      .patch(`/products/${productId}`)
+      .send({ direct_selling_price: 250 });
+    expect(updatedProduct.body.data.direct_selling_price).toBe(250);
+
+    const created = await admin.post("/direct-sales").send({
+      product_id: productId,
+      product_name: "Test product",
+      sold_by: "Alice",
+      sold_date: "2026-10-05",
+      quantity: 2,
+      selling_price: 1,
+      production_cost: 80,
+      label_cost: 8,
+      jar_pouch_cost: 12,
+      payment_amount: 0,
+      payment_status: "unpaid",
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body.data.selling_price).toBe(500);
+    expect(created.body.data.profit).toBe(400);
+
+    const updated = await admin.patch(`/direct-sales/${created.body.data.id}`).send({
+      quantity: 3,
+      selling_price: 1,
+    });
+    expect(updated.body.data.selling_price).toBe(750);
+    expect(updated.body.data.profit).toBe(650);
   });
 
   it("rejects malformed or contradictory list filters", async () => {

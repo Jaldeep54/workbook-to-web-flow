@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { Product } from "../models/catalogue.model.js";
 import { DirectSale } from "../models/direct-sale.model.js";
 import { ApiError } from "../utils/api-error.js";
 import { created, ok } from "../utils/api-response.js";
@@ -72,14 +73,41 @@ export async function listDirectSales(req: Request, res: Response) {
 }
 
 export async function createDirectSale(req: Request, res: Response) {
-  const sale = await DirectSale.create(req.body as Record<string, unknown>);
+  const body = req.body as Record<string, unknown> & {
+    product_id: string;
+    quantity: number;
+  };
+  const product = await Product.findById(body.product_id).lean();
+  if (!product) throw ApiError.badRequest("Product not found");
+
+  const unitPrice = product.direct_selling_price ?? product.selling_price;
+  const sale = await DirectSale.create({
+    ...body,
+    selling_price: +(unitPrice * body.quantity).toFixed(2),
+  });
   return created(res, strip(sale.toObject()));
 }
 
 export async function updateDirectSale(req: Request, res: Response) {
   const sale = await DirectSale.findById(req.params.id);
   if (!sale) throw ApiError.notFound("Direct sale not found");
-  sale.set(req.body as Record<string, unknown>);
+  const body = req.body as Record<string, unknown> & {
+    product_id?: string;
+    quantity?: number;
+  };
+  const productId = body.product_id ?? sale.product_id;
+  const quantity = body.quantity ?? sale.quantity;
+  const priceChanged = productId !== sale.product_id || quantity !== sale.quantity;
+  let sellingPrice = sale.selling_price;
+
+  if (priceChanged) {
+    const product = await Product.findById(productId).lean();
+    if (!product) throw ApiError.badRequest("Product not found");
+    const unitPrice = product.direct_selling_price ?? product.selling_price;
+    sellingPrice = +(unitPrice * quantity).toFixed(2);
+  }
+
+  sale.set({ ...body, selling_price: sellingPrice });
   await sale.save();
   return ok(res, strip(sale.toObject()));
 }

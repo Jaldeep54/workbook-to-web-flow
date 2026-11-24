@@ -183,6 +183,12 @@ still assigned to users can't be deleted (409).
 of `sheet_cost ÷ labels_per_sheet` across a product's labels, recalculated
 whenever a label is added, re-priced, reassigned or removed.
 
+Products have separate `selling_price` (shopkeeper/order rate) and
+`direct_selling_price` (Direct Selling rate). If a direct rate has not yet been
+configured for an existing product, the API initially presents the current
+`selling_price` as its default; set the direct rate under Rates & settings →
+Direct selling to make it independent.
+
 ## Orders
 
 | Method | Path | Permission |
@@ -325,8 +331,10 @@ Direct-sale list filters are `month=YYYY-MM-01` or the inclusive date range
 `fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD` (not both), plus `soldBy` for a
 case-insensitive seller-name search. The list includes filtered `rows`, total
 sales and profit in `summary`, and product totals in `byProduct`. Sale amounts
-and costs are stored on each record; product rates prefill new entries in the
-web app, and the profit is recalculated from those saved amounts.
+and costs are stored on each record. New sales use the product's configured
+`direct_selling_price` multiplied by quantity (the submitted selling price is
+not trusted), and changing product or quantity while editing recalculates from
+the current direct rate. Other edits keep the sale's saved price.
 
 `/cash-position/summary` returns all-time totals plus
 `moneyInHand = investments + payments received + direct-sale payments received

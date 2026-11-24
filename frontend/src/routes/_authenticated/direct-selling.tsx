@@ -136,7 +136,7 @@ function DirectSellingPage() {
       product_id: product.id,
       product_name: product.name,
       quantity: qty,
-      selling_price: +(product.selling_price * qty).toFixed(2),
+      selling_price: +(product.direct_selling_price * qty).toFixed(2),
       production_cost: +(product.production_cost * qty).toFixed(2),
       label_cost: +(product.label_cost_per_unit * qty).toFixed(2),
       jar_pouch_cost: +(product.packaging_cost * qty).toFixed(2),
@@ -401,7 +401,6 @@ function DirectSellingPage() {
             {/* Cost fields */}
             {(
               [
-                ["selling_price", "Selling Price"],
                 ["production_cost", "Production Cost"],
                 ["label_cost", "Label Cost"],
                 ["jar_pouch_cost", "Jar & Pouch Cost"],
@@ -419,6 +418,15 @@ function DirectSellingPage() {
                 />
               </div>
             ))}
+            <div className="grid grid-cols-3 items-center gap-2">
+              <Label className="text-right">Direct Selling Price</Label>
+              <Input
+                type="number"
+                className="col-span-2 num text-right"
+                value={form.selling_price}
+                readOnly
+              />
+            </div>
             {/* Profit (read-only) */}
             <div className="grid grid-cols-3 items-center gap-2">
               <Label className="text-right text-muted-foreground">Profit</Label>

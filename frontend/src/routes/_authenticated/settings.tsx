@@ -36,13 +36,13 @@ function SettingsPage() {
     <>
       <PageHeader
         title="Rates & settings"
-        description="These are the workbook's Inputs sheet values. Changing them affects new deliveries only — past deliveries keep their frozen figures."
+        description="These are the workbook's Inputs sheet values. Rate changes apply to new deliveries and direct sales; past records keep their saved figures."
       />
       <Tabs defaultValue="products">
         <TabsList>
           <TabsTrigger value="products">Product rates</TabsTrigger>
           <TabsTrigger value="labels">Label rates</TabsTrigger>
-          <TabsTrigger value="sales">Sales rates</TabsTrigger>
+          <TabsTrigger value="sales">Direct selling</TabsTrigger>
         </TabsList>
         <TabsContent value="products" className="pt-4">
           <ProductRates />
@@ -90,7 +90,7 @@ function ProductRates() {
         <TableHeader>
           <TableRow>
             <TableHead>Product</TableHead>
-            <TableHead className="text-right">Selling price</TableHead>
+            <TableHead className="text-right">Shopkeeper price</TableHead>
             <TableHead className="text-right">Production</TableHead>
             <TableHead className="text-right">Jar & can</TableHead>
             <TableHead className="text-right">Label / unit</TableHead>
@@ -133,10 +133,9 @@ function ProductRates() {
 }
 
 /**
- * Sales / unit — the same products.selling_price column the Product rates tab
- * already edits (and computeDeliveryTotals already uses for totalSales), just
- * in a dedicated, product-name-focused view. No new field: one source of
- * truth, two editing surfaces.
+ * Direct-selling prices are independent from the shopkeeper price used for
+ * regular orders. Existing products without a configured rate are presented
+ * with their current selling price until an administrator saves a direct rate.
  */
 function SalesRates() {
   const qc = useQueryClient();
@@ -147,7 +146,7 @@ function SalesRates() {
   const save = useMutation({
     mutationFn: async () => {
       for (const row of rows) {
-        await productsApi.update(row.id, { selling_price: row.selling_price });
+        await productsApi.update(row.id, { direct_selling_price: row.direct_selling_price });
       }
     },
     onSuccess: () => {
@@ -158,7 +157,7 @@ function SalesRates() {
   });
 
   const set = (id: string, value: number) =>
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, selling_price: value } : r)));
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, direct_selling_price: value } : r)));
 
   return (
     <div className="surface-card overflow-x-auto">
@@ -166,7 +165,7 @@ function SalesRates() {
         <TableHeader>
           <TableRow>
             <TableHead>Product</TableHead>
-            <TableHead className="text-right">Sales / unit</TableHead>
+            <TableHead className="text-right">Direct selling price / unit</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -179,7 +178,7 @@ function SalesRates() {
                   min={0}
                   step="0.01"
                   className="num ml-auto w-28 text-right"
-                  value={p.selling_price}
+                  value={p.direct_selling_price}
                   onChange={(e) => set(p.id, Number(e.target.value))}
                 />
               </TableCell>

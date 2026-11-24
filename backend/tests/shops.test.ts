@@ -60,6 +60,21 @@ describe("Shops, areas and files", () => {
     expect((await admin.get("/shops/next-code")).body.data.code).toBe("2");
   });
 
+  it("creates a shop without a location", async () => {
+    const response = await admin.post("/shops").send({
+      code: "NO-LOCATION",
+      shop_name: "Location Optional Shop",
+      area_id: areaId,
+      latitude: null,
+      longitude: null,
+      product_ids: productIds.slice(0, 1),
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.latitude).toBeNull();
+    expect(response.body.data.longitude).toBeNull();
+  });
+
   it("rejects duplicate shop codes and invalid coordinates", async () => {
     expectError(
       await admin.post("/shops").send({

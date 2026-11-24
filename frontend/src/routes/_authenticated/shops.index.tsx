@@ -336,10 +336,8 @@ function ShopsPage() {
     );
 
   /**
-   * A shop is only saved once it is described in full: every field on the form
-   * is mandatory, so no shop reaches the table with a blank column. The photo
-   * is the sole exception — it is uploaded separately and is often taken
-   * later, so requiring it would block adding a shop at all.
+   * Core shop details are required. Location coordinates and the photo are
+   * optional, so shops can be recorded before those details are available.
    *
    * The same rule applies when editing, which is how shops imported from the
    * workbook get their gaps filled in.
@@ -357,7 +355,6 @@ function ShopsPage() {
     if (!form.joined_on) missing.push("Joined on");
     if (selectedProducts.length === 0) missing.push("Products this shop works with");
     if (!form.address.trim()) missing.push("Address");
-    if (form.latitude == null || form.longitude == null) missing.push("Location");
     return missing;
   }, [form, selectedProducts]);
 
@@ -654,7 +651,6 @@ function ShopsPage() {
                   />
                 </div>
                 <LocationPicker
-                  required
                   address={form.address}
                   latitude={form.latitude}
                   longitude={form.longitude}
@@ -674,7 +670,7 @@ function ShopsPage() {
             <p className="text-xs text-muted-foreground">
               {missingRequired.length > 0
                 ? `Still needed: ${missingRequired.join(", ")}`
-                : "Every field is required — the shop photo is optional."}
+                : "Location and shop photo are optional."}
             </p>
             <Button
               onClick={() => save.mutate()}
@@ -741,9 +737,7 @@ function ShopsPage() {
                 {/* Step one of two — use a plain Button so the AlertDialog doesn't
                     auto-close. AlertDialogAction closes the dialog via Radix's internal
                     state, bypassing e.preventDefault(). */}
-                <Button onClick={() => setDeleteConfirmed(true)}>
-                  Continue
-                </Button>
+                <Button onClick={() => setDeleteConfirmed(true)}>Continue</Button>
               </AlertDialogFooter>
             </>
           )}

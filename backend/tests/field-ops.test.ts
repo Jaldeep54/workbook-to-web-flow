@@ -12,9 +12,9 @@ import {
 } from "./helpers.js";
 
 /**
- * Field Operations: a manager only sees the shops they work, "Make Payment"
- * settles pending deliveries oldest first, and change money only leaves cash
- * in hand once a manager marks it paid.
+ * Field Operations: a manager only sees the shops they work, collections use
+ * explicit per-bill allocations, and change money only leaves cash in hand
+ * once a manager marks it paid.
  */
 describe("Field operations and team dashboards", () => {
   let admin: Agent;
@@ -102,7 +102,7 @@ describe("Field operations and team dashboards", () => {
     expect(list.body.data.shops).toHaveLength(1);
   });
 
-  it("applies a collection to pending deliveries oldest first", async () => {
+  it("applies a collection only to the bills and amounts explicitly selected", async () => {
     // Created out of date order, to prove allocation follows delivery date.
     await deliveredOrder(ownShopId, "2026-09-03", 4);
     await deliveredOrder(ownShopId, "2026-09-01", 2);
@@ -117,23 +117,101 @@ describe("Field operations and team dashboards", () => {
     expect(pending.body.data.total_pending).toBe(9 * price);
 
     expectError(
-      await manager.post(`/field-ops/shops/${ownShopId}/collections`).send({ amount: 10 * price }),
+      await manager.post(`/field-ops/shops/${ownShopId}/collections`).send({
+        allocations: [{ payment_id: pending.body.data.deliveries[0].payment_id, amount: 10 * price }],
+      }),
       400,
     );
 
-    // Pays the first two in full and half a unit's worth into the third.
-    const amount = 5 * price + price / 2;
+    const first = pending.body.data.deliveries[0];
+    const third = pending.body.data.deliveries[2];
+    const amount = price + 1.5 * price;
     const paid = await manager
       .post(`/field-ops/shops/${ownShopId}/collections`)
-      .send({ amount, change_money: 20, collection_date: "2026-09-05" });
+      .send({
+        allocations: [
+          { payment_id: third.payment_id, amount: 1.5 * price },
+          { payment_id: first.payment_id, amount: price },
+        ],
+        change_money: 20,
+        collection_date: "2026-09-05",
+      });
     expect(paid.status).toBe(201);
-    expect(paid.body.data.collection.allocations).toHaveLength(3);
-    expect(paid.body.data.total_pending).toBe(9 * price - amount);
+    expect(paid.body.data.collection.amount).toBeCloseTo(amount, 2);
+    expect(paid.body.data.collection.allocations).toEqual([
+      { payment_id: third.payment_id, order_id: third.order_id, amount: 1.5 * price },
+      { payment_id: first.payment_id, order_id: first.order_id, amount: price },
+    ]);
+    expect(paid.body.data.total_pending).toBeCloseTo(9 * price - amount, 2);
 
     const after = await manager.get(`/field-ops/shops/${ownShopId}/pending`);
-    expect(after.body.data.deliveries).toHaveLength(1);
-    expect(after.body.data.deliveries[0].delivery_date).toBe("2026-09-03");
-    expect(after.body.data.deliveries[0].balance).toBe(4 * price - price / 2);
+    expect(after.body.data.deliveries).toHaveLength(3);
+    expect(after.body.data.deliveries.map((d: { balance: number }) => d.balance)).toEqual([
+      price,
+      3 * price,
+      2.5 * price,
+    ]);
+    const shopList = await manager.get("/field-ops/shops");
+    const ownShop = shopList.body.data.shops.find((s: { id: string }) => s.id === ownShopId);
+    expect(ownShop.pending_balance).toBeCloseTo(9 * price - amount, 2);
+  });
+
+  it("grants a single Field Operations tab without exposing the other tabs", async () => {
+    const created = await createRoleWithUser(admin, {
+      roleName: "New Order Tab",
+      email: "field.order.only@example.com",
+      permissions: ["field_operations_orders:view"],
+    });
+    await admin.patch(`/roles/${created.roleId}`).send({ fieldRole: "manager" });
+    const shop = await admin.post("/shops").send({
+      code: "FO3",
+      shop_name: "Order Tab Shop",
+      area_id: areaId,
+      handled_by_user_id: created.userId,
+      product_ids: [productId],
+    });
+
+    const catalogue = await admin.get("/permissions");
+    expect(
+      catalogue.body.data.permissions
+        .filter((permission: { resource: string }) =>
+          permission.resource.startsWith("field_operations_"),
+        )
+        .map((permission: { name: string }) => permission.name),
+    ).toEqual(
+      expect.arrayContaining([
+        "field_operations_shops:view",
+        "field_operations_delivery:view",
+        "field_operations_orders:view",
+        "field_operations_payments:view",
+      ]),
+    );
+
+    const fieldShops = await created.agent.get("/field-ops/shops");
+    expect(fieldShops.status).toBe(200);
+    expect(fieldShops.body.data.shops.map((s: { id: string }) => s.id)).toEqual([shop.body.data.id]);
+    expect((await created.agent.get("/products")).status).toBe(200);
+    expect((await created.agent.get(`/orders?date=2026-10-10`)).status).toBe(200);
+    expectError(await created.agent.get(`/field-ops/shops/${shop.body.data.id}/pending`), 403);
+    expectError(await created.agent.get("/orders/delivery-sheet?date=2026-10-10"), 403);
+    expectError(await created.agent.get("/payments"), 403);
+
+    const order = await created.agent.post("/orders").send({
+      shop_id: shop.body.data.id,
+      order_date: "2026-10-10",
+      delivery_date: "2026-10-11",
+      order_lines: [{ product_id: productId, qty: 1 }],
+    });
+    expect(order.status).toBe(201);
+    expectError(
+      await created.agent.post("/orders").send({
+        shop_id: otherShopId,
+        order_date: "2026-10-10",
+        delivery_date: "2026-10-11",
+        order_lines: [{ product_id: productId, qty: 1 }],
+      }),
+      404,
+    );
   });
 
   it("lists the manager's activity with totals", async () => {
@@ -147,7 +225,7 @@ describe("Field operations and team dashboards", () => {
     expect(deliveries.body.data.summary.total).toBe(9 * price);
 
     const collections = await admin.get(`/team/managers/${managerId}/activity?type=collections`);
-    expect(collections.body.data.summary.total).toBe(5 * price + price / 2);
+    expect(collections.body.data.summary.total).toBeCloseTo(2.5 * price, 2);
   });
 
   it("takes change money out of cash in hand only once it is marked paid", async () => {

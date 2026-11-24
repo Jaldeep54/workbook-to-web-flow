@@ -61,9 +61,9 @@ export type PendingDelivery = {
 };
 
 /**
- * Every delivery the shop still owes money on, in the order a collection pays
- * them off: oldest delivery date first, then lowest order number for
- * deliveries on the same day (so the order the shop actually placed them in).
+ * Every delivery the shop still owes money on, returned in a stable display
+ * order: oldest delivery date first, then lowest order number for deliveries
+ * on the same day.
  * The delivery's own date is used, falling back to the payment's date for rows
  * whose delivery has since gone.
  */
@@ -107,17 +107,16 @@ export async function pendingDeliveries(shopId: string): Promise<PendingDelivery
 export type CollectionInput = {
   shopId: string;
   collectionDate: string;
-  amount: number;
+  allocations: Array<{ paymentId: string; amount: number }>;
   changeMoney: number;
   collectedBy: { id: string | null; name: string | null };
   recordedByUserId: string;
 };
 
 /**
- * "Make Payment": spreads one collected sum across the shop's pending
- * deliveries, oldest first, until it runs out. With ₹2,000 / ₹3,500 / ₹4,000
- * pending and ₹6,000 collected, the first two are settled and ₹500 goes
- * against the third, leaving ₹3,500 still owed on it.
+ * "Make Payment": applies the collector's explicit per-bill allocations.
+ * Change money is recorded separately and does not alter the amount applied
+ * to bills.
  *
  * Each payment is written with a guard on the amount it was read at, so two
  * people collecting from the same shop at once can't both spend the same
@@ -125,20 +124,37 @@ export type CollectionInput = {
  * caller is asked to retry.
  */
 export async function recordCollection(input: CollectionInput) {
-  const amount = round2(input.amount);
-  if (amount <= 0) throw ApiError.badRequest("Collection amount must be greater than zero");
-
   const pending = await pendingDeliveries(input.shopId);
-  const totalPending = round2(pending.reduce((sum, p) => sum + p.balance, 0));
-  if (totalPending <= 0) throw ApiError.badRequest("This shop has no pending payments");
-  if (amount > totalPending) {
-    throw ApiError.badRequest(
-      `Collection of ₹${amount} is more than the ₹${totalPending} this shop owes`,
-    );
+  const pendingById = new Map(pending.map((row) => [row.payment_id, row]));
+  const requestedIds = new Set<string>();
+  const allocations: CollectionAllocation[] = [];
+  let amount = 0;
+
+  for (const requested of input.allocations) {
+    if (requestedIds.has(requested.paymentId)) {
+      throw ApiError.badRequest("A bill can only be listed once in a collection");
+    }
+    requestedIds.add(requested.paymentId);
+
+    const row = pendingById.get(requested.paymentId);
+    if (!row) throw ApiError.badRequest("One of the selected bills is no longer pending");
+    if (!Number.isFinite(requested.amount) || requested.amount <= 0) {
+      throw ApiError.badRequest("Each bill allocation must be greater than zero");
+    }
+    const share = round2(requested.amount);
+    if (share <= 0) throw ApiError.badRequest("Each bill allocation must be at least ₹0.01");
+    if (share > row.balance) {
+      throw ApiError.badRequest(`Allocation exceeds the ${row.balance} still due on a bill`);
+    }
+
+    amount = round2(amount + share);
+    allocations.push({ payment_id: row.payment_id, order_id: row.order_id, amount: share });
   }
 
-  let remaining = amount;
-  const allocations: CollectionAllocation[] = [];
+  if (amount <= 0) throw ApiError.badRequest("Collection amount must be greater than zero");
+
+  const totalPending = round2(pending.reduce((sum, p) => sum + p.balance, 0));
+  if (totalPending <= 0) throw ApiError.badRequest("This shop has no pending payments");
   const applied: Array<{ payment_id: string; previous: number }> = [];
 
   const rollback = async () => {
@@ -151,10 +167,9 @@ export async function recordCollection(input: CollectionInput) {
   };
 
   try {
-    for (const row of pending) {
-      if (remaining <= 0) break;
-      const share = round2(Math.min(row.balance, remaining));
-      const received = round2(row.amount_received + share);
+    for (const allocation of allocations) {
+      const row = pendingById.get(allocation.payment_id)!;
+      const received = round2(row.amount_received + allocation.amount);
 
       const result = await Payment.updateOne(
         { _id: row.payment_id, amount_received: row.amount_received },
@@ -175,8 +190,6 @@ export async function recordCollection(input: CollectionInput) {
       }
 
       applied.push({ payment_id: row.payment_id, previous: row.amount_received });
-      allocations.push({ payment_id: row.payment_id, order_id: row.order_id, amount: share });
-      remaining = round2(remaining - share);
     }
 
     return await Collection.create({

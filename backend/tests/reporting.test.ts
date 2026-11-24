@@ -94,6 +94,23 @@ describe("Dashboard, analysis and cash position", () => {
     expect(data.productMix[0].sharePct).toBe(100);
   });
 
+  it("totals exact inclusive date ranges and omits the monthly trend", async () => {
+    const response = await admin.get(
+      "/dashboard/summary?fromDate=2026-08-10&toDate=2026-08-12",
+    );
+    expect(response.status).toBe(200);
+
+    const data = response.body.data;
+    expect(data.fromDate).toBe("2026-08-10");
+    expect(data.toDate).toBe("2026-08-12");
+    expect(data.orderCount).toBe(2);
+    expect(data.deliveryCount).toBe(2);
+    expect(data.totalSales).toBeCloseTo(14 * product.selling_price, 2);
+    expect(data.paymentsPending).toBeCloseTo(14 * product.selling_price, 2);
+    expect(data.variableCost).toBe(0);
+    expect(data.monthlySales).toEqual([]);
+  });
+
   it("scopes the summary to one area but keeps variable cost business-wide", async () => {
     const other = (await admin.post("/shop-areas").send({ name: "Katargam" })).body.data.id;
     const scoped = await admin.get(`/dashboard/summary?month=2026-08-01&areaId=${other}`);
@@ -184,6 +201,11 @@ describe("Dashboard, analysis and cash position", () => {
     expectError(await admin.get("/dashboard/summary"), 422);
     expectError(await admin.get("/dashboard/summary?month=2026-08"), 422);
     expectError(await admin.get("/dashboard/summary?month=2026-08-15"), 422); // must be the 1st
+    expectError(await admin.get("/dashboard/summary?fromDate=2026-08-01"), 422);
+    expectError(
+      await admin.get("/dashboard/summary?fromDate=2026-08-20&toDate=2026-08-01"),
+      422,
+    );
     expectError(await admin.get("/orders/due-dates?financialYear=20xx"), 422);
     expectError(await admin.get("/orders?sortBy=DROP+TABLE"), 400);
     expectError(await admin.get("/shops/does-not-exist/analysis"), 404);

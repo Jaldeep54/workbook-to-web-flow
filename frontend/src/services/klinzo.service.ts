@@ -379,7 +379,9 @@ export const cashPositionApi = {
 /* --------------------------------------------------------------- dashboard */
 
 export type DashboardSummary = {
-  month: string;
+  month: string | null;
+  fromDate: string | null;
+  toDate: string | null;
   areaId: string | null;
   orderCount: number;
   orderQty: number;
@@ -429,8 +431,8 @@ export type SkuOpportunityRow = {
 };
 
 export const dashboardApi = {
-  summary: (month: string, areaId?: string) =>
-    api.get<DashboardSummary>("/dashboard/summary", { month, areaId }),
+  summary: (period: { month?: string; fromDate?: string; toDate?: string }, areaId?: string) =>
+    api.get<DashboardSummary>("/dashboard/summary", { ...period, areaId }),
   availableMonths: () => api.get<string[]>("/dashboard/available-months"),
   orderQtyByProduct: () => api.get<ProductQtyRow[]>("/dashboard/order-qty-by-product"),
   skuOpportunity: () => api.get<SkuOpportunityRow[]>("/dashboard/sku-opportunity"),
@@ -566,9 +568,10 @@ export type FieldShop = {
   handled_by_user_id: string | null;
   salesperson: string | null;
   salesperson_user_id: string | null;
+  pending_balance: number;
 };
 
-/** One delivery still owed on, in the order Make Payment settles them (oldest first). */
+/** One bill still owed on, listed oldest first for quick reference. */
 export type PendingDelivery = {
   payment_id: string;
   order_id: string;
@@ -609,7 +612,7 @@ export const fieldOpsApi = {
     shopId: string,
     payload: {
       collection_date: string;
-      amount: number;
+      allocations: Array<{ payment_id: string; amount: number }>;
       change_money: number;
       collected_by_user_id?: string | null;
     },

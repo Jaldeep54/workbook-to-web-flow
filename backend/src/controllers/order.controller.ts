@@ -1,13 +1,16 @@
 import type { Request, Response } from "express";
 
+import { RESOURCES } from "../config/permissions.js";
 import { Delivery, Order, type IOrder } from "../models/order.model.js";
 import { Shop } from "../models/shop.model.js";
+import { assertShopInScope, fieldScopeFor } from "../services/field-ops.service.js";
 import {
   deleteOrderCascade,
   nextOrderNo,
   setOrderDelivered,
   setOrderStatus,
 } from "../services/order.service.js";
+import { can } from "../services/rbac.service.js";
 import { ApiError } from "../utils/api-error.js";
 import { buildPaginationMeta, created, ok, paginated } from "../utils/api-response.js";
 import { financialYearRange, round2 } from "../utils/date.js";
@@ -42,6 +45,29 @@ function presentOrder(order: IOrder, shops: Map<string, ShopRef>) {
   return { id: _id, shop_id, ...rest, shops: shops.get(shop_id) ?? null };
 }
 
+async function applyFieldShopScope(
+  req: Request,
+  filter: Record<string, unknown>,
+  baseResource: string,
+  baseAction: string,
+) {
+  if (can(req.user!.permissions, baseResource, baseAction)) return;
+  const { filter: fieldScope } = await fieldScopeFor(req.user!.id);
+  const scopedShops = await Shop.find(fieldScope, { _id: 1 }).lean();
+  const allowedIds = new Set(scopedShops.map((shop) => shop._id));
+  const current = filter.shop_id;
+  const requestedIds =
+    typeof current === "string"
+      ? [current]
+      : current && typeof current === "object" && "$in" in current
+        ? (current as { $in: string[] }).$in
+        : null;
+  const ids = requestedIds
+    ? requestedIds.filter((id) => allowedIds.has(id))
+    : Array.from(allowedIds);
+  filter.shop_id = { $in: ids };
+}
+
 export async function listOrders(req: Request, res: Response) {
   const { page, limit, skip, sort } = parseListQuery(
     req.query as Record<string, unknown>,
@@ -68,6 +94,7 @@ export async function listOrders(req: Request, res: Response) {
     const delivered = await Delivery.distinct("order_id");
     filter._id = { $nin: delivered as string[] };
   }
+  await applyFieldShopScope(req, filter, RESOURCES.orders, "view");
 
   const [rows, total] = await Promise.all([
     Order.find(filter).sort(sort).skip(skip).limit(limit).lean(),
@@ -87,6 +114,7 @@ export async function deliverySheet(req: Request, res: Response) {
   const filter: Record<string, unknown> = { delivery_date: req.query.date };
   const areaShopIds = await shopIdsForArea(req.query.areaId as string | undefined);
   if (areaShopIds) filter.shop_id = { $in: areaShopIds };
+  await applyFieldShopScope(req, filter, RESOURCES.orders, "view");
 
   const rows = await Order.find(filter).sort({ order_no: 1 }).limit(1000).lean();
   const shops = await shopRefs(rows.map((r) => r.shop_id));
@@ -96,9 +124,11 @@ export async function deliverySheet(req: Request, res: Response) {
 /** Delivery-due dates in a financial year, purely to light up the calendar. */
 export async function deliveryDueDates(req: Request, res: Response) {
   const { start, end } = financialYearRange(req.query.financialYear as string);
-  const dates = await Order.distinct("delivery_date", {
+  const filter: Record<string, unknown> = {
     delivery_date: { $ne: null, $gte: start, $lte: end },
-  });
+  };
+  await applyFieldShopScope(req, filter, RESOURCES.orders, "view");
+  const dates = await Order.distinct("delivery_date", filter);
   return ok(res, (dates as string[]).filter(Boolean).sort());
 }
 
@@ -138,6 +168,9 @@ async function assertNoOrderOnDate(shopId: string, orderDate: string, exceptOrde
 
 export async function createOrder(req: Request, res: Response) {
   const body = req.body as OrderBody;
+  if (!can(req.user!.permissions, RESOURCES.orders, "create")) {
+    await assertShopInScope(req.user!.id, body.shop_id);
+  }
   if (!(await Shop.exists({ _id: body.shop_id }))) throw ApiError.badRequest("Shop not found");
   await assertNoOrderOnDate(body.shop_id, body.order_date);
 
@@ -200,6 +233,11 @@ export async function changeOrderStatus(req: Request, res: Response) {
     delivery_date?: string;
   };
 
+  if (!can(req.user!.permissions, RESOURCES.orders, "manage")) {
+    const order = await Order.findById(req.params.id, { shop_id: 1 }).lean();
+    if (!order) throw ApiError.notFound("Order not found");
+    await assertShopInScope(req.user!.id, order.shop_id);
+  }
   await setOrderStatus(req.params.id, status, deliveryDate ?? null, req.user);
 
   const order = await Order.findById(req.params.id).lean();
@@ -216,5 +254,8 @@ export async function deleteOrder(req: Request, res: Response) {
 export async function getNextOrderNo(req: Request, res: Response) {
   const shopId = String(req.query.shopId ?? "");
   if (!shopId) throw ApiError.badRequest("shopId is required");
+  if (!can(req.user!.permissions, RESOURCES.orders, "create")) {
+    await assertShopInScope(req.user!.id, shopId);
+  }
   return ok(res, { order_no: await nextOrderNo("orders", shopId) });
 }

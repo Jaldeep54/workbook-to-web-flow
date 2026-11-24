@@ -5,8 +5,7 @@ import { Shop, ShopProduct } from "../models/shop.model.js";
 import { addMonths, round2 } from "../utils/date.js";
 
 /**
- * Monthly KPI summary — the MongoDB port of `dashboard_summary()` /
- * `dashboard_summary_by_area()`.
+ * Overview summary — monthly or for an inclusive date range.
  *
  * Everything is aggregated in the database rather than shipping raw rows to
  * the browser, exactly as the RPC did, and both the whole-business and
@@ -18,7 +17,9 @@ import { addMonths, round2 } from "../utils/date.js";
  * dashboard still shows the whole business's figure.
  */
 export type DashboardSummary = {
-  month: string;
+  month: string | null;
+  fromDate: string | null;
+  toDate: string | null;
   areaId: string | null;
   orderCount: number;
   orderQty: number;
@@ -45,6 +46,21 @@ export type DashboardSummary = {
   }>;
   topShops: Array<{ shopId: string; shopName: string; sales: number }>;
 };
+
+export type DashboardPeriod = {
+  month?: string;
+  fromDate?: string;
+  toDate?: string;
+};
+
+function periodFilter(field: string, period: DashboardPeriod): Record<string, unknown> {
+  if (period.month) return { month: period.month };
+
+  const bounds: Record<string, string> = {};
+  if (period.fromDate) bounds.$gte = period.fromDate;
+  if (period.toDate) bounds.$lte = period.toDate;
+  return { [field]: bounds };
+}
 
 /** Shop ids inside an area — the scoping key every area-aware query uses. */
 async function shopIdsInArea(areaId: string | null): Promise<string[] | null> {
@@ -113,7 +129,7 @@ async function labelsByProductKey(filter: Record<string, unknown>): Promise<Reco
   return out;
 }
 
-/** Revenue per product for a month = Σ delivered qty x current selling price. */
+/** Revenue per product = Σ delivered qty x current selling price. */
 async function productRevenueMix(filter: Record<string, unknown>) {
   const rows = await Delivery.aggregate<{ _id: string; qty: number }>([
     { $match: filter },
@@ -167,14 +183,17 @@ async function outstandingTotal(filter: Record<string, unknown>): Promise<number
 }
 
 export async function dashboardSummary(
-  month: string,
+  period: DashboardPeriod,
   areaId: string | null = null,
 ): Promise<DashboardSummary> {
   const shopIds = await shopIdsInArea(areaId);
-  const monthFilter = scoped({ month }, shopIds);
-
-  const windowStart = addMonths(month, -2);
-  const trendMonths = [windowStart, addMonths(month, -1), month];
+  const orderFilter = scoped(periodFilter("order_date", period), shopIds);
+  const deliveryFilter = scoped(periodFilter("delivery_date", period), shopIds);
+  const paymentFilter = scoped(periodFilter("payment_date", period), shopIds);
+  const labelFilter = scoped(periodFilter("order_date", period), shopIds);
+  const trendMonths = period.month
+    ? [addMonths(period.month, -2), addMonths(period.month, -1), period.month]
+    : [];
 
   const [
     orderCount,
@@ -196,31 +215,30 @@ export async function dashboardSummary(
     productMix,
     topShopRows,
   ] = await Promise.all([
-    Order.countDocuments(scoped({ month, total_qty: { $gt: 0 } }, shopIds)),
-    sumField(Order, monthFilter, "total_qty"),
-    qtyByProductKey(Order, monthFilter, "order_lines"),
-    Delivery.countDocuments(scoped({ month, total_qty: { $gt: 0 } }, shopIds)),
-    sumField(Delivery, monthFilter, "total_qty"),
-    qtyByProductKey(Delivery, monthFilter, "delivery_lines"),
-    sumField(Delivery, monthFilter, "total_sales"),
-    sumField(Delivery, monthFilter, "total_fixed_cost"),
-    // Money, not statuses: a part payment is cash in hand for what arrived and
-    // outstanding for the rest, so both figures are sums over every payment
-    // rather than over the rows carrying a particular status.
-    Payment.countDocuments(scoped({ month, amount_received: { $gt: 0 } }, shopIds)),
-    sumField(Payment, monthFilter, "amount_received"),
-    outstandingTotal(scoped({ month }, shopIds)),
-    sumField(VariableCost, { month }, "amount"),
-    LabelOrder.countDocuments(scoped({ month, total_labels: { $gt: 0 } }, shopIds)),
-    labelsByProductKey(monthFilter),
-    sumField(LabelOrder, monthFilter, "total_labels"),
+    Order.countDocuments({ ...orderFilter, total_qty: { $gt: 0 } }),
+    sumField(Order, orderFilter, "total_qty"),
+    qtyByProductKey(Order, orderFilter, "order_lines"),
+    Delivery.countDocuments({ ...deliveryFilter, total_qty: { $gt: 0 } }),
+    sumField(Delivery, deliveryFilter, "total_qty"),
+    qtyByProductKey(Delivery, deliveryFilter, "delivery_lines"),
+    sumField(Delivery, deliveryFilter, "total_sales"),
+    sumField(Delivery, deliveryFilter, "total_fixed_cost"),
+    Payment.countDocuments({ ...paymentFilter, amount_received: { $gt: 0 } }),
+    sumField(Payment, paymentFilter, "amount_received"),
+    outstandingTotal(paymentFilter),
+    sumField(VariableCost, periodFilter("cost_date", period), "amount"),
+    LabelOrder.countDocuments({ ...labelFilter, total_labels: { $gt: 0 } }),
+    labelsByProductKey(labelFilter),
+    sumField(LabelOrder, labelFilter, "total_labels"),
+    period.month
+      ? Delivery.aggregate<{ _id: string; sales: number }>([
+          { $match: scoped({ month: { $in: trendMonths } }, shopIds) },
+          { $group: { _id: "$month", sales: { $sum: "$total_sales" } } },
+        ])
+      : Promise.resolve([]),
+    productRevenueMix(deliveryFilter),
     Delivery.aggregate<{ _id: string; sales: number }>([
-      { $match: scoped({ month: { $in: trendMonths } }, shopIds) },
-      { $group: { _id: "$month", sales: { $sum: "$total_sales" } } },
-    ]),
-    productRevenueMix(monthFilter),
-    Delivery.aggregate<{ _id: string; sales: number }>([
-      { $match: monthFilter },
+      { $match: deliveryFilter },
       { $group: { _id: "$shop_id", sales: { $sum: "$total_sales" } } },
       { $sort: { sales: -1 } },
       { $limit: 5 },
@@ -235,7 +253,9 @@ export async function dashboardSummary(
   const shopNameById = new Map(topShopNames.map((s) => [s._id, s.shop_name]));
 
   return {
-    month,
+    month: period.month ?? null,
+    fromDate: period.fromDate ?? null,
+    toDate: period.toDate ?? null,
     areaId,
     orderCount,
     orderQty,

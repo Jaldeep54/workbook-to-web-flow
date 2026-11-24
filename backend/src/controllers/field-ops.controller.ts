@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 
 import { Collection, type ICollection } from "../models/collection.model.js";
+import { Payment } from "../models/order.model.js";
 import { Shop, ShopArea } from "../models/shop.model.js";
 import { User } from "../models/user.model.js";
 import {
@@ -13,6 +14,8 @@ import {
 import { ApiError } from "../utils/api-error.js";
 import { created, ok } from "../utils/api-response.js";
 import { round2, todayIso } from "../utils/date.js";
+import { can } from "../services/rbac.service.js";
+import { RESOURCES } from "../config/permissions.js";
 
 /**
  * Field Operations — the mobile tab managers and salespersons work from.
@@ -52,7 +55,27 @@ export async function listFieldShops(req: Request, res: Response) {
       .lean(),
     ShopArea.find({}, { name: 1 }).lean(),
   ]);
+  const pendingRows =
+    shops.length === 0
+      ? []
+      : await Payment.aggregate<{ _id: string; balance: number }>([
+          { $match: { shop_id: { $in: shops.map((shop) => shop._id) } } },
+          {
+            $group: {
+              _id: "$shop_id",
+              balance: {
+                $sum: {
+                  $max: [
+                    0,
+                    { $subtract: ["$amount", { $ifNull: ["$amount_received", 0] }] },
+                  ],
+                },
+              },
+            },
+          },
+        ]);
   const areaName = new Map(areas.map((a) => [a._id, a.name]));
+  const pendingByShop = new Map(pendingRows.map((row) => [row._id, round2(row.balance)]));
 
   return ok(res, {
     scope,
@@ -60,6 +83,7 @@ export async function listFieldShops(req: Request, res: Response) {
       id: _id,
       ...rest,
       area_name: rest.area_id ? (areaName.get(rest.area_id) ?? null) : null,
+      pending_balance: pendingByShop.get(_id) ?? 0,
     })),
   });
 }
@@ -91,7 +115,7 @@ export async function makePayment(req: Request, res: Response) {
 
   const body = req.body as {
     collection_date?: string;
-    amount: number;
+    allocations: Array<{ payment_id: string; amount: number }>;
     change_money?: number;
     collected_by_user_id?: string | null;
   };
@@ -106,7 +130,10 @@ export async function makePayment(req: Request, res: Response) {
   const collection = await recordCollection({
     shopId,
     collectionDate: body.collection_date || todayIso(),
-    amount: body.amount,
+    allocations: body.allocations.map(({ payment_id, amount }) => ({
+      paymentId: payment_id,
+      amount,
+    })),
     changeMoney: body.change_money ?? 0,
     collectedBy,
     recordedByUserId: req.user!.id,
@@ -120,6 +147,11 @@ export async function makePayment(req: Request, res: Response) {
 }
 
 export async function deleteCollection(req: Request, res: Response) {
+  if (!can(req.user!.permissions, RESOURCES.payments, "update")) {
+    const collection = await Collection.findById(req.params.id, { shop_id: 1 }).lean();
+    if (!collection) throw ApiError.notFound("Collection not found");
+    await assertShopInScope(req.user!.id, collection.shop_id);
+  }
   await reverseCollection(req.params.id);
   return ok(res, { message: "Collection reversed" });
 }

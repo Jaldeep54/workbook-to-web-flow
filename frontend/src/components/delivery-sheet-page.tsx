@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Can, RESOURCES, usePermissions } from "@/hooks/usePermissions";
+import { RESOURCES, usePermissions } from "@/hooks/usePermissions";
 import { ordersApi } from "@/services/klinzo.service";
 import { productsQuery, shopsQuery } from "@/lib/queries";
 import { deliverySheetQuery, deliveryDueDatesQuery } from "@/lib/records";
@@ -40,13 +40,17 @@ import { downloadCsv } from "@/lib/export";
  * The Delivery sheet page body. Lives here rather than in the route file so
  * Field Operations can show the very same sheet as one of its tabs.
  */
-export function DeliverySheetPage() {
+export function DeliverySheetPage({
+  fieldOperationsAccess = false,
+}: {
+  fieldOperationsAccess?: boolean;
+} = {}) {
   const qc = useQueryClient();
   const { can } = usePermissions();
   // Changing a status cascades into deliveries and payments, so it needs
   // orders:manage rather than plain update.
-  const canSetStatus = can(RESOURCES.orders, "manage");
-  const canGenerateBills = can(RESOURCES.bills, "create");
+  const canSetStatus = can(RESOURCES.orders, "manage") || fieldOperationsAccess;
+  const canGenerateBills = can(RESOURCES.bills, "create") || fieldOperationsAccess;
   const [date, setDate] = useState(todayISO());
   const [fy, setFy] = useState(currentFinancialYear());
   const [month, setMonth] = useState(currentMonth());
@@ -187,7 +191,7 @@ export function DeliverySheetPage() {
             >
               <Download className="size-4" /> Export
             </Button>
-            <Can resource={RESOURCES.bills} action="create">
+            {canGenerateBills && (
               <Button
                 variant="outline"
                 disabled={selectedCount === 0 || generateAllBills.isPending}
@@ -196,7 +200,7 @@ export function DeliverySheetPage() {
                 <Send className="size-4" /> Generate all bills
                 {selectedCount > 0 ? ` (${selectedCount})` : ""}
               </Button>
-            </Can>
+            )}
           </>
         }
       />

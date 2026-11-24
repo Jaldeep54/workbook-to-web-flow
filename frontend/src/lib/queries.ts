@@ -92,7 +92,16 @@ export const availableMonthsQuery = queryOptions({
 export const summaryByAreaQuery = (month: string, areaId: string | "all") =>
   queryOptions({
     queryKey: ["dashboard_summary", month, areaId],
-    queryFn: () => dashboardApi.summary(month, areaId === "all" ? undefined : areaId),
+    queryFn: () => dashboardApi.summary({ month }, areaId === "all" ? undefined : areaId),
+  });
+
+export const summaryByDateRangeQuery = (
+  range: { fromDate?: string; toDate: string },
+  areaId: string | "all",
+) =>
+  queryOptions({
+    queryKey: ["dashboard_summary", "range", range.fromDate ?? "all", range.toDate, areaId],
+    queryFn: () => dashboardApi.summary(range, areaId === "all" ? undefined : areaId),
   });
 
 export const labelStockQuery = queryOptions({

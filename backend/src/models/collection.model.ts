@@ -7,12 +7,11 @@ import { ISO_DATE_MATCH, schemaOptions, uuidId } from "./base.js";
  * One cash collection from a shop — the "Make Payment" action in Field
  * Operations.
  *
- * A shop hands over one sum against however many deliveries it still owes on,
- * so the collection is the ledger row and `allocations` record how that sum
- * was spread across the shop's payments, oldest delivery first (see
- * services/field-ops.service.ts). The payments' own `amount_received` is what
- * every report reads; this row is the audit trail behind it, and what the
- * Manager Dashboard lists as "Payment Collections".
+ * A shop hands over one sum against selected bills, so the collection is the
+ * ledger row and `allocations` record the amount applied to each payment.
+ * The payments' own `amount_received` is what every report reads; this row is
+ * the audit trail behind it, and what the Manager Dashboard lists as
+ * "Payment Collections".
  *
  * `change_money` is cash the collector handed back to the shop out of the
  * business's money. It leaves cash in hand only once a manager marks it paid

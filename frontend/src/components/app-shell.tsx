@@ -41,6 +41,7 @@ const NAV: Array<{
   label: string;
   icon: typeof LayoutDashboard;
   resource: string;
+  anyOf?: string[];
   section?: string;
 }> = [
   { to: "/", label: "Overview", icon: LayoutDashboard, resource: RESOURCES.dashboard },
@@ -49,6 +50,12 @@ const NAV: Array<{
     label: "Field Operations",
     icon: Smartphone,
     resource: RESOURCES.fieldOperations,
+    anyOf: [
+      RESOURCES.fieldOperationsShops,
+      RESOURCES.fieldOperationsDelivery,
+      RESOURCES.fieldOperationsOrders,
+      RESOURCES.fieldOperationsPayments,
+    ],
   },
   { to: "/shops", label: "Shops", icon: Store, resource: RESOURCES.shops },
   { to: "/shops/map", label: "Shops on Map", icon: MapPin, resource: RESOURCES.shops },
@@ -112,7 +119,14 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { can } = usePermissions();
 
-  const visible = useMemo(() => NAV.filter((item) => can(item.resource, "view")), [can]);
+  const visible = useMemo(
+    () =>
+      NAV.filter(
+        (item) =>
+          can(item.resource, "view") || item.anyOf?.some((resource) => can(resource, "view")),
+      ),
+    [can],
+  );
 
   return (
     <nav className="flex flex-col gap-1">

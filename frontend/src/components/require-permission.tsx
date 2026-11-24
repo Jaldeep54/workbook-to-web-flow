@@ -16,14 +16,24 @@ import { usePermissions, type PermissionAction } from "@/hooks/usePermissions";
 export function RequirePermission({
   resource,
   action = "view",
+  anyOf,
   children,
 }: {
-  resource: string;
+  resource?: string;
   action?: PermissionAction;
+  anyOf?: Array<{ resource: string; action?: PermissionAction }>;
   children: ReactNode;
 }) {
   const { can } = usePermissions();
-  if (can(resource, action)) return <>{children}</>;
+  const allowed =
+    (resource ? can(resource, action) : false) ||
+    (anyOf?.some((permission) => can(permission.resource, permission.action ?? "view")) ?? false);
+  if (allowed) return <>{children}</>;
+  const required = anyOf
+    ? anyOf
+        .map((permission) => `${permission.resource}:${permission.action ?? "view"}`)
+        .join(" or ")
+    : `${resource}:${action}`;
 
   return (
     <div className="grid min-h-[60vh] place-items-center">
@@ -32,10 +42,8 @@ export function RequirePermission({
         <h1 className="mt-4 text-xl font-semibold">You don't have access to this page</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Your role doesn't include the{" "}
-          <code className="rounded bg-secondary px-1.5 py-0.5 text-xs">
-            {resource}:{action}
-          </code>{" "}
-          permission. Ask an administrator if you need it.
+          <code className="rounded bg-secondary px-1.5 py-0.5 text-xs">{required}</code> permission.
+          Ask an administrator if you need it.
         </p>
         <Button asChild variant="outline" className="mt-6">
           <Link to="/">Back to overview</Link>

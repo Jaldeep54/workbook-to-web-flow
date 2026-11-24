@@ -279,6 +279,39 @@ intersects with `areaId` and `shopId` rather than replacing them.
 > `npm run seed`, which treats a `Received` row as fully paid and every other
 > row as unpaid.
 
+## Field Operations
+
+The Field Operations page has independent `field_operations_shops:view`,
+`field_operations_delivery:view`, `field_operations_orders:view` and
+`field_operations_payments:view` grants. The older `field_operations:view`
+grant remains supported as access to all four tabs.
+
+| Method | Path | Permission |
+|---|---|---|
+| GET | `/field-ops/shops` | any Field Operations tab |
+| GET | `/field-ops/shops/:id/pending` | Payments tab |
+| GET | `/field-ops/shops/:id/collections` | Shops, New Order or Payments tab |
+| POST | `/field-ops/shops/:id/collections` | Payments tab |
+| DELETE | `/field-ops/collections/:id` | Payments tab |
+
+`POST /field-ops/shops/:id/collections` accepts explicit bill allocations:
+
+```json
+{
+  "collection_date": "2026-09-05",
+  "allocations": [
+    { "payment_id": "…", "amount": 500 },
+    { "payment_id": "…", "amount": 250 }
+  ],
+  "change_money": 20
+}
+```
+
+Each bill can be listed once, and its allocation cannot exceed its current
+balance. The collection amount is the sum applied to bills; `change_money` is
+tracked separately and does not change those allocations. The Field Operations
+shop list includes each shop's all-time `pending_balance`.
+
 ## Label orders and stock
 
 | Method | Path | Permission |
@@ -346,14 +379,20 @@ the current direct rate. Other edits keep the sale's saved price.
 | Method | Path | Permission |
 |---|---|---|
 | GET | `/dashboard/summary?month=&areaId=` | `dashboard:view` |
+| GET | `/dashboard/summary?fromDate=&toDate=&areaId=` | `dashboard:view` |
+| GET | `/dashboard/summary?toDate=&areaId=` | `dashboard:view` (all time through date) |
 | GET | `/dashboard/available-months` | `dashboard:view` |
 | GET | `/dashboard/order-qty-by-product` | `reports:view` |
 | GET | `/dashboard/sku-opportunity` | `sku_opportunity:view` |
 | GET | `/shops/:id/analysis?months=3` | `shops:view` |
 
-`/dashboard/summary` returns order/delivery/payment/label totals for the month,
-a 3-month sales trend, the product revenue mix and the top 5 shops. `areaId`
-scopes everything except `variableCost`, which has no area dimension.
+`/dashboard/summary` accepts either a month or an inclusive date range. In date
+mode, `fromDate` may be omitted to report all history through `toDate`.
+Orders use their order date, deliveries and related bills use their delivery
+date, label orders and variable costs use their own dates. Date summaries omit
+the monthly sales trend; monthly summaries retain the 3-month trend. Both
+include product mix and the top 5 shops. `areaId` scopes shop-related totals
+but not `variableCost`, which has no area dimension.
 
 ## Bills, import and files
 

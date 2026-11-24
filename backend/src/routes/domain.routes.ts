@@ -70,18 +70,37 @@ const upload = multer({
   limits: { fileSize: env.MAX_UPLOAD_BYTES },
 });
 
+const fieldOperationAccess = [
+  { resource: RESOURCES.fieldOperations, action: "view" },
+  { resource: RESOURCES.fieldOperationsShops, action: "view" },
+  { resource: RESOURCES.fieldOperationsDelivery, action: "view" },
+  { resource: RESOURCES.fieldOperationsOrders, action: "view" },
+  { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+];
+
 /* ------------------------------------------------------------------- shops */
 
 export const shopRouter = Router();
 
 shopRouter.get(
   "/",
-  authorize(RESOURCES.shops, "view"),
+  authorizeAny([
+    { resource: RESOURCES.shops, action: "view" },
+    { resource: RESOURCES.fieldOperationsDelivery, action: "view" },
+    { resource: RESOURCES.fieldOperationsOrders, action: "view" },
+  ]),
   validate({ query: shopListQuery }),
   asyncHandler(shops.listShops),
 );
 shopRouter.get("/next-code", authorize(RESOURCES.shops, "create"), asyncHandler(shops.getNextShopCode));
-shopRouter.get("/products", authorize(RESOURCES.shops, "view"), asyncHandler(shops.listShopProducts));
+shopRouter.get(
+  "/products",
+  authorizeAny([
+    { resource: RESOURCES.shops, action: "view" },
+    { resource: RESOURCES.fieldOperationsOrders, action: "view" },
+  ]),
+  asyncHandler(shops.listShopProducts),
+);
 /** People a shop can be "Handled by" — see the controller for who qualifies. */
 shopRouter.get("/handlers", authorize(RESOURCES.shops, "view"), asyncHandler(shops.listShopHandlers));
 /** People a shop's "Salesperson" can be — users of salesperson roles. */
@@ -106,6 +125,8 @@ shopRouter.get(
 const shopInfoAccess = authorizeAny([
   { resource: RESOURCES.shops, action: "view" },
   { resource: RESOURCES.fieldOperations, action: "view" },
+  { resource: RESOURCES.fieldOperationsShops, action: "view" },
+  { resource: RESOURCES.fieldOperationsOrders, action: "view" },
 ]);
 
 shopRouter.get(
@@ -157,7 +178,14 @@ shopRouter.delete(
 
 export const shopAreaRouter = Router();
 
-shopAreaRouter.get("/", authorize(RESOURCES.shopAreas, "view"), asyncHandler(shops.listShopAreas));
+shopAreaRouter.get(
+  "/",
+  authorizeAny([
+    { resource: RESOURCES.shopAreas, action: "view" },
+    ...fieldOperationAccess,
+  ]),
+  asyncHandler(shops.listShopAreas),
+);
 shopAreaRouter.post(
   "/",
   authorize(RESOURCES.shopAreas, "create"),
@@ -181,7 +209,16 @@ shopAreaRouter.delete(
 
 export const productRouter = Router();
 
-productRouter.get("/", authorize(RESOURCES.products, "view"), asyncHandler(catalogue.listProducts));
+productRouter.get(
+  "/",
+  authorizeAny([
+    { resource: RESOURCES.products, action: "view" },
+    { resource: RESOURCES.fieldOperationsShops, action: "view" },
+    { resource: RESOURCES.fieldOperationsDelivery, action: "view" },
+    { resource: RESOURCES.fieldOperationsOrders, action: "view" },
+  ]),
+  asyncHandler(catalogue.listProducts),
+);
 productRouter.post(
   "/",
   authorize(RESOURCES.products, "create"),
@@ -233,26 +270,45 @@ export const orderRouter = Router();
 
 orderRouter.get(
   "/",
-  authorize(RESOURCES.orders, "view"),
+  authorizeAny([
+    { resource: RESOURCES.orders, action: "view" },
+    { resource: RESOURCES.fieldOperationsOrders, action: "view" },
+  ]),
   validate({ query: orderListQuery }),
   asyncHandler(orders.listOrders),
 );
 orderRouter.get(
   "/delivery-sheet",
-  authorize(RESOURCES.orders, "view"),
+  authorizeAny([
+    { resource: RESOURCES.orders, action: "view" },
+    { resource: RESOURCES.fieldOperationsDelivery, action: "view" },
+  ]),
   validate({ query: deliverySheetQuery }),
   asyncHandler(orders.deliverySheet),
 );
 orderRouter.get(
   "/due-dates",
-  authorize(RESOURCES.orders, "view"),
+  authorizeAny([
+    { resource: RESOURCES.orders, action: "view" },
+    { resource: RESOURCES.fieldOperationsDelivery, action: "view" },
+  ]),
   validate({ query: dueDatesQuery }),
   asyncHandler(orders.deliveryDueDates),
 );
-orderRouter.get("/next-no", authorize(RESOURCES.orders, "create"), asyncHandler(orders.getNextOrderNo));
+orderRouter.get(
+  "/next-no",
+  authorizeAny([
+    { resource: RESOURCES.orders, action: "create" },
+    { resource: RESOURCES.fieldOperationsOrders, action: "view" },
+  ]),
+  asyncHandler(orders.getNextOrderNo),
+);
 orderRouter.post(
   "/",
-  authorize(RESOURCES.orders, "create"),
+  authorizeAny([
+    { resource: RESOURCES.orders, action: "create" },
+    { resource: RESOURCES.fieldOperationsOrders, action: "view" },
+  ]),
   validate({ body: orderCreateSchema }),
   asyncHandler(orders.createOrder),
 );
@@ -271,7 +327,10 @@ orderRouter.put(
 /** Status changes cascade into deliveries and payments — hence `manage`. */
 orderRouter.patch(
   "/:id/status",
-  authorize(RESOURCES.orders, "manage"),
+  authorizeAny([
+    { resource: RESOURCES.orders, action: "manage" },
+    { resource: RESOURCES.fieldOperationsDelivery, action: "view" },
+  ]),
   validate({ params: idParam, body: orderStatusSchema }),
   asyncHandler(orders.changeOrderStatus),
 );
@@ -495,38 +554,55 @@ export const fieldOpsRouter = Router();
 
 fieldOpsRouter.get(
   "/shops",
-  authorize(RESOURCES.fieldOperations, "view"),
+  authorizeAny(fieldOperationAccess),
   validate({ query: fieldShopsQuery }),
   asyncHandler(fieldOps.listFieldShops),
 );
 fieldOpsRouter.get(
   "/collectors",
-  authorize(RESOURCES.fieldOperations, "view"),
+  authorizeAny([
+    { resource: RESOURCES.fieldOperations, action: "view" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+  ]),
   asyncHandler(fieldOps.listFieldCollectors),
 );
 fieldOpsRouter.get(
   "/shops/:id/pending",
-  authorize(RESOURCES.fieldOperations, "view"),
+  authorizeAny([
+    { resource: RESOURCES.fieldOperations, action: "view" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+  ]),
   validate({ params: idParam }),
   asyncHandler(fieldOps.getPendingPayments),
 );
 fieldOpsRouter.get(
   "/shops/:id/collections",
-  authorize(RESOURCES.fieldOperations, "view"),
+  authorizeAny([
+    { resource: RESOURCES.fieldOperations, action: "view" },
+    { resource: RESOURCES.fieldOperationsShops, action: "view" },
+    { resource: RESOURCES.fieldOperationsOrders, action: "view" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+  ]),
   validate({ params: idParam }),
   asyncHandler(fieldOps.listShopCollections),
 );
-/** Make Payment — applies the sum to pending deliveries, oldest first. */
+/** Make Payment — applies the submitted per-bill allocations. */
 fieldOpsRouter.post(
   "/shops/:id/collections",
-  authorize(RESOURCES.fieldOperations, "create"),
+  authorizeAny([
+    { resource: RESOURCES.fieldOperations, action: "create" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+  ]),
   validate({ params: idParam, body: makePaymentSchema }),
   asyncHandler(fieldOps.makePayment),
 );
 /** Reversing a collection rewrites payments, so it needs payments:update. */
 fieldOpsRouter.delete(
   "/collections/:id",
-  authorize(RESOURCES.payments, "update"),
+  authorizeAny([
+    { resource: RESOURCES.payments, action: "update" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+  ]),
   validate({ params: idParam }),
   asyncHandler(fieldOps.deleteCollection),
 );
@@ -585,7 +661,10 @@ export const billRouter = Router();
 
 billRouter.post(
   "/",
-  authorize(RESOURCES.bills, "create"),
+  authorizeAny([
+    { resource: RESOURCES.bills, action: "create" },
+    { resource: RESOURCES.fieldOperationsDelivery, action: "view" },
+  ]),
   validate({ body: billsSchema }),
   asyncHandler(misc.generateBills),
 );

@@ -1,8 +1,12 @@
 import type { Request, Response } from "express";
 
+import { RESOURCES } from "../config/permissions.js";
+import { Order } from "../models/order.model.js";
 import { buildBills } from "../services/bill.service.js";
+import { assertShopInScope } from "../services/field-ops.service.js";
 import { openShopImage, verifySignedImage } from "../services/file.service.js";
 import { importWorkbook } from "../services/import.service.js";
+import { can } from "../services/rbac.service.js";
 import { ApiError } from "../utils/api-error.js";
 import { ok } from "../utils/api-response.js";
 
@@ -16,6 +20,10 @@ import { ok } from "../utils/api-response.js";
  */
 export async function generateBills(req: Request, res: Response) {
   const { orderIds } = req.body as { orderIds: string[] };
+  if (!can(req.user!.permissions, RESOURCES.bills, "create")) {
+    const orders = await Order.find({ _id: { $in: orderIds } }, { shop_id: 1 }).lean();
+    await Promise.all(orders.map((order) => assertShopInScope(req.user!.id, order.shop_id)));
+  }
   return ok(res, await buildBills(orderIds));
 }
 

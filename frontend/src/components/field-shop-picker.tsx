@@ -14,7 +14,13 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-type PickableShop = { id: string; shop_name: string; label_name: string | null; code: string };
+type PickableShop = {
+  id: string;
+  shop_name: string;
+  label_name: string | null;
+  code: string;
+  pending_balance?: number;
+};
 
 /**
  * Type-to-search shop picker over a list the caller already holds — Field
@@ -63,7 +69,16 @@ export function FieldShopPicker({
           aria-expanded={open}
           className="w-full justify-between bg-card font-normal"
         >
-          <span className={cn("truncate", !selected && value !== "all" && "text-muted-foreground")}>
+          <span
+            className={cn(
+              "truncate",
+              selected
+                ? (selected.pending_balance ?? 0) > 0
+                  ? "text-destructive"
+                  : "text-success"
+                : !selected && value !== "all" && "text-muted-foreground",
+            )}
+          >
             {selected
               ? shopLabel(selected.shop_name, selected.label_name)
               : allowAll && value === "all"
@@ -92,7 +107,14 @@ export function FieldShopPicker({
                 </CommandItem>
               )}
               {filtered.map((s) => (
-                <CommandItem key={s.id} value={s.id} onSelect={() => pick(s.id)}>
+                <CommandItem
+                  key={s.id}
+                  value={s.id}
+                  onSelect={() => pick(s.id)}
+                  className={
+                    s.pending_balance && s.pending_balance > 0 ? "text-destructive" : "text-success"
+                  }
+                >
                   <Check className={cn("size-4", s.id === value ? "opacity-100" : "opacity-0")} />
                   {shopLabel(s.shop_name, s.label_name)}
                 </CommandItem>

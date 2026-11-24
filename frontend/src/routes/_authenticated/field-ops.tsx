@@ -45,11 +45,19 @@ import { RESOURCES, usePermissions } from "@/hooks/usePermissions";
 import { fieldShopsQuery } from "@/lib/queries";
 import { dateLabel, inr, todayISO } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { fieldOpsApi, type FieldShop, type PendingDelivery } from "@/services/klinzo.service";
+import { fieldOpsApi, type FieldShop } from "@/services/klinzo.service";
 
 export const Route = createFileRoute("/_authenticated/field-ops")({
   component: () => (
-    <RequirePermission resource={RESOURCES.fieldOperations}>
+    <RequirePermission
+      anyOf={[
+        { resource: RESOURCES.fieldOperations },
+        { resource: RESOURCES.fieldOperationsShops },
+        { resource: RESOURCES.fieldOperationsDelivery },
+        { resource: RESOURCES.fieldOperationsOrders },
+        { resource: RESOURCES.fieldOperationsPayments },
+      ]}
+    >
       <FieldOpsPage />
     </RequirePermission>
   ),
@@ -57,11 +65,26 @@ export const Route = createFileRoute("/_authenticated/field-ops")({
 
 type Section = "shops" | "delivery" | "order" | "payments";
 
-const SECTIONS: Array<{ id: Section; label: string; icon: typeof Store }> = [
-  { id: "shops", label: "Shops", icon: Store },
-  { id: "delivery", label: "Delivery", icon: CalendarDays },
-  { id: "order", label: "New order", icon: ClipboardList },
-  { id: "payments", label: "Payments", icon: CreditCard },
+const SECTIONS: Array<{ id: Section; label: string; icon: typeof Store; permission: string }> = [
+  { id: "shops", label: "Shops", icon: Store, permission: RESOURCES.fieldOperationsShops },
+  {
+    id: "delivery",
+    label: "Delivery",
+    icon: CalendarDays,
+    permission: RESOURCES.fieldOperationsDelivery,
+  },
+  {
+    id: "order",
+    label: "New order",
+    icon: ClipboardList,
+    permission: RESOURCES.fieldOperationsOrders,
+  },
+  {
+    id: "payments",
+    label: "Payments",
+    icon: CreditCard,
+    permission: RESOURCES.fieldOperationsPayments,
+  },
 ];
 
 const SECTION_KEY = "field_ops_section";
@@ -76,6 +99,10 @@ const SECTION_KEY = "field_ops_section";
  */
 function FieldOpsPage() {
   const { can } = usePermissions();
+  const legacyView = can(RESOURCES.fieldOperations, "view");
+  const visibleSections = SECTIONS.filter(
+    (section) => legacyView || can(section.permission, "view"),
+  );
   const [section, setSection] = useState<Section>(() => {
     try {
       const saved = localStorage.getItem(SECTION_KEY) as Section | null;
@@ -84,13 +111,17 @@ function FieldOpsPage() {
       return "shops";
     }
   });
+  const activeSection = visibleSections.some((s) => s.id === section)
+    ? section
+    : (visibleSections[0]?.id ?? "shops");
   useEffect(() => {
+    if (activeSection !== section) setSection(activeSection);
     try {
-      localStorage.setItem(SECTION_KEY, section);
+      localStorage.setItem(SECTION_KEY, activeSection);
     } catch {
       // Private mode — the section just won't be remembered.
     }
-  }, [section]);
+  }, [activeSection, section]);
 
   const [infoShop, setInfoShop] = useState<FieldShop | null>(null);
   const fieldShops = useQuery(fieldShopsQuery);
@@ -116,14 +147,14 @@ function FieldOpsPage() {
           "sm:static sm:mb-6 sm:inline-grid sm:rounded-xl sm:border sm:bg-card sm:p-1",
         )}
       >
-        {SECTIONS.map((s) => (
+        {visibleSections.map((s) => (
           <button
             key={s.id}
             type="button"
             onClick={() => setSection(s.id)}
             className={cn(
               "flex flex-col items-center gap-0.5 px-1 py-2 text-[11px] font-medium transition-colors sm:flex-row sm:gap-2 sm:rounded-lg sm:px-4 sm:text-sm",
-              section === s.id
+              activeSection === s.id
                 ? "text-primary sm:bg-secondary sm:text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
@@ -134,22 +165,28 @@ function FieldOpsPage() {
         ))}
       </nav>
 
-      {section === "shops" && (
+      {activeSection === "shops" && (
         <ShopsSection shops={shops} loading={fieldShops.isLoading} onOpenShop={setInfoShop} />
       )}
-      {section === "delivery" &&
-        (can(RESOURCES.orders, "view") ? (
-          <DeliverySheetPage />
+      {activeSection === "delivery" &&
+        (legacyView ||
+        can(RESOURCES.fieldOperationsDelivery, "view") ||
+        can(RESOURCES.orders, "view") ? (
+          <DeliverySheetPage
+            fieldOperationsAccess={can(RESOURCES.fieldOperationsDelivery, "view")}
+          />
         ) : (
           <NoAccess what="the delivery sheet" permission="orders:view" />
         ))}
-      {section === "order" &&
-        (can(RESOURCES.orders, "create") ? (
+      {activeSection === "order" &&
+        (legacyView ||
+        can(RESOURCES.fieldOperationsOrders, "view") ||
+        can(RESOURCES.orders, "create") ? (
           <NewOrderSection shops={shops} scoped={scope !== "all"} />
         ) : (
           <NoAccess what="new orders" permission="orders:create" />
         ))}
-      {section === "payments" && <PaymentsSection shops={shops} />}
+      {activeSection === "payments" && <PaymentsSection shops={shops} />}
 
       <ShopInfoDialog
         shopId={infoShop?.id ?? null}
@@ -239,7 +276,12 @@ function ShopsSection({
               >
                 <span className="num w-6 shrink-0 text-xs text-muted-foreground">{i + 1}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-medium break-words">
+                  <span
+                    className={cn(
+                      "block font-medium break-words",
+                      s.pending_balance > 0 ? "text-destructive" : "text-success",
+                    )}
+                  >
                     {shopLabel(s.shop_name, s.label_name)}
                   </span>
                   <span className="block text-xs text-muted-foreground">
@@ -305,7 +347,10 @@ function ShopsSection({
                       <button
                         type="button"
                         onClick={() => onOpenShop(s)}
-                        className="text-left font-medium text-primary underline-offset-2 hover:underline"
+                        className={cn(
+                          "text-left font-medium underline-offset-2 hover:underline",
+                          s.pending_balance > 0 ? "text-destructive" : "text-success",
+                        )}
                       >
                         {shopLabel(s.shop_name, s.label_name)}
                       </button>
@@ -371,32 +416,20 @@ function NewOrderSection({ shops, scoped }: { shops: FieldShop[]; scoped: boolea
 
 /* ---------------------------------------------------------------- payments */
 
-/** What Make Payment will do with `amount`, delivery by delivery — mirrors the API. */
-function previewAllocation(pending: PendingDelivery[], amount: number) {
-  let remaining = amount;
-  return pending.map((p) => {
-    const paid = Math.max(0, Math.min(p.balance, remaining));
-    remaining -= paid;
-    return {
-      ...p,
-      paying: Math.round(paid * 100) / 100,
-      left: Math.round((p.balance - paid) * 100) / 100,
-    };
-  });
-}
-
 function PaymentsSection({ shops }: { shops: FieldShop[] }) {
   const qc = useQueryClient();
   const { user } = useAuth();
   const { can } = usePermissions();
-  const canCollect = can(RESOURCES.fieldOperations, "create");
-  const canReverse = can(RESOURCES.payments, "update");
+  const canCollect =
+    can(RESOURCES.fieldOperations, "create") || can(RESOURCES.fieldOperationsPayments, "view");
+  const canReverse =
+    can(RESOURCES.payments, "update") || can(RESOURCES.fieldOperationsPayments, "view");
 
   const [area, setArea] = useState("all");
   const [shopId, setShopId] = useState("");
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [collectionDate, setCollectionDate] = useState(todayISO());
-  const [amount, setAmount] = useState("");
+  const [allocationAmounts, setAllocationAmounts] = useState<Record<string, string>>({});
   const [changeMoney, setChangeMoney] = useState("");
   const [collectorId, setCollectorId] = useState(user?.id ?? "");
 
@@ -407,6 +440,7 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
   useEffect(() => {
     if (shopId && !inArea.some((s) => s.id === shopId)) setShopId("");
   }, [inArea, shopId]);
+  useEffect(() => setAllocationAmounts({}), [shopId]);
 
   const pending = useQuery({
     queryKey: ["field_pending", shopId],
@@ -426,10 +460,19 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
   });
 
   const totalPending = pending.data?.total_pending ?? 0;
-  const amountNum = Number(amount) || 0;
-  const preview = useMemo(
-    () => previewAllocation(pending.data?.deliveries ?? [], amountNum),
-    [pending.data, amountNum],
+  const allocations = useMemo(
+    () =>
+      (pending.data?.deliveries ?? []).flatMap((delivery) => {
+        const amount = Number(allocationAmounts[delivery.payment_id]) || 0;
+        return amount > 0
+          ? [{ payment_id: delivery.payment_id, amount, balance: delivery.balance }]
+          : [];
+      }),
+    [pending.data, allocationAmounts],
+  );
+  const amountNum = allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+  const exceedsBillBalance = allocations.some(
+    (allocation) => allocation.amount > allocation.balance,
   );
 
   const invalidate = () => {
@@ -449,15 +492,14 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
   const makePayment = useMutation({
     mutationFn: () => {
       if (!shopId) throw new Error("Choose a shop");
-      if (amountNum <= 0) throw new Error("Enter the collection amount");
-      if (amountNum > totalPending) {
-        throw new Error(`The shop only owes ${inr(totalPending, 2)}`);
-      }
+      if (allocations.length === 0) throw new Error("Enter an amount for at least one bill");
+      if (exceedsBillBalance)
+        throw new Error("A bill allocation cannot exceed its pending balance");
       const change = Number(changeMoney) || 0;
       if (change < 0) throw new Error("Change money cannot be negative");
       return fieldOpsApi.makePayment(shopId, {
         collection_date: collectionDate,
-        amount: amountNum,
+        allocations: allocations.map(({ payment_id, amount }) => ({ payment_id, amount })),
         change_money: change,
         collected_by_user_id: collectorId || null,
       });
@@ -466,7 +508,7 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
       toast.success(
         `Payment recorded — ${inr(result.total_pending, 2)} still pending for this shop`,
       );
-      setAmount("");
+      setAllocationAmounts({});
       setChangeMoney("");
       invalidate();
     },
@@ -493,7 +535,14 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Shop Name</Label>
-          <FieldShopPicker shops={inArea} value={shopId} onChange={setShopId} />
+          <FieldShopPicker
+            shops={inArea}
+            value={shopId}
+            onChange={(id) => {
+              setAllocationAmounts({});
+              setShopId(id);
+            }}
+          />
         </div>
       </div>
 
@@ -558,18 +607,6 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Collection Amount (₹)</Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.01"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1.5">
                   <Label className="text-xs">Change Money (₹)</Label>
                   <Input
                     type="number"
@@ -587,48 +624,63 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
                 Dashboard.
               </p>
 
-              {amountNum > 0 && (
-                <div className="rounded-lg border border-border">
-                  <p className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
-                    Will be applied oldest delivery first
-                  </p>
-                  <div className="divide-y divide-border">
-                    {preview
-                      .filter((p) => p.paying > 0)
-                      .map((p) => (
-                        <div
-                          key={p.payment_id}
-                          className="num flex justify-between gap-2 px-3 py-2 text-sm"
-                        >
-                          <span>
-                            {dateLabel(p.delivery_date)}
-                            {p.order_no != null && (
-                              <span className="ml-1 text-xs text-muted-foreground">
-                                #{p.order_no}
-                              </span>
-                            )}
-                          </span>
-                          <span>
-                            {inr(p.paying, 2)}
+              <div className="rounded-lg border border-border">
+                <p className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+                  Enter the amount to apply to each bill
+                </p>
+                <div className="divide-y divide-border">
+                  {(pending.data?.deliveries ?? []).map((delivery) => (
+                    <div
+                      key={delivery.payment_id}
+                      className="grid grid-cols-[1fr_8rem] items-center gap-3 px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          {dateLabel(delivery.delivery_date)}
+                          {delivery.order_no != null && (
                             <span className="ml-1 text-xs text-muted-foreground">
-                              {p.left > 0 ? `· ${inr(p.left, 2)} left` : "· paid"}
+                              #{delivery.order_no}
                             </span>
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                  {amountNum > totalPending && (
-                    <p className="px-3 py-2 text-xs text-destructive">
-                      More than the {inr(totalPending, 2)} this shop owes.
-                    </p>
-                  )}
+                          )}
+                        </p>
+                        <p className="num text-xs text-muted-foreground">
+                          Balance {inr(delivery.balance, 2)}
+                        </p>
+                      </div>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        max={delivery.balance}
+                        step="0.01"
+                        value={allocationAmounts[delivery.payment_id] ?? ""}
+                        onChange={(event) =>
+                          setAllocationAmounts((current) => ({
+                            ...current,
+                            [delivery.payment_id]: event.target.value,
+                          }))
+                        }
+                        aria-label={`Amount to apply to order ${delivery.order_no ?? ""}`}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  ))}
                 </div>
-              )}
+                <div className="flex items-center justify-between border-t border-border px-3 py-3 text-sm">
+                  <span className="font-medium">Collection amount</span>
+                  <span className="num font-semibold">{inr(amountNum, 2)}</span>
+                </div>
+                {exceedsBillBalance && (
+                  <p className="px-3 pb-3 text-xs text-destructive">
+                    An amount cannot exceed the pending balance on its bill.
+                  </p>
+                )}
+              </div>
 
               <Button
                 size="lg"
                 className="w-full"
-                disabled={makePayment.isPending || amountNum <= 0 || amountNum > totalPending}
+                disabled={makePayment.isPending || allocations.length === 0 || exceedsBillBalance}
                 onClick={() => makePayment.mutate()}
               >
                 Make Payment
@@ -679,7 +731,8 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
               <DialogHeader className="text-left">
                 <DialogTitle>Pending by delivery</DialogTitle>
                 <p className="text-xs text-muted-foreground">
-                  {selectedShop?.shop_name} · oldest first, the order payments are applied in
+                  {selectedShop?.shop_name} · oldest first for reference; collection amounts are
+                  entered per bill
                 </p>
               </DialogHeader>
               {(pending.data?.deliveries ?? []).length === 0 ? (

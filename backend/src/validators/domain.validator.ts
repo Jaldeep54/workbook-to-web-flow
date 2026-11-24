@@ -254,8 +254,30 @@ export const payoutSchema = z.object({
 /* --------------------------------------------------------------- dashboard */
 
 export const dashboardQuery = z.object({
-  month: monthString,
+  month: monthString.optional(),
+  fromDate: isoDate.optional(),
+  toDate: isoDate.optional(),
   areaId: areaFilter,
+}).superRefine((query, ctx) => {
+  if (query.month && (query.fromDate || query.toDate)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Choose either a month or a date range",
+    });
+  }
+  if (!query.month && !query.toDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "A month or end date is required",
+    });
+  }
+  if (query.fromDate && (!query.toDate || query.fromDate > query.toDate)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["fromDate"],
+      message: "Start date must be on or before the end date",
+    });
+  }
 });
 
 export const shopAnalysisQuery = z.object({
@@ -274,7 +296,15 @@ export const fieldShopsQuery = z.object({ areaId: areaFilter });
 
 export const makePaymentSchema = z.object({
   collection_date: isoDate.optional(),
-  amount: z.coerce.number().positive("Collection amount must be greater than zero"),
+  allocations: z
+    .array(
+      z.object({
+        payment_id: idString,
+        amount: z.coerce.number().positive("Bill allocation must be greater than zero"),
+      }),
+    )
+    .min(1)
+    .max(200),
   change_money: z.coerce.number().min(0, "Change money cannot be negative").default(0),
   /** Defaults to the signed-in user. */
   collected_by_user_id: idString.nullish(),

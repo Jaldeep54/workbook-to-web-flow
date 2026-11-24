@@ -4,9 +4,12 @@ import { Delivery, LabelOrder, Order, Payment } from "../models/order.model.js";
 import { Role } from "../models/role.model.js";
 import { Shop, ShopArea, ShopProduct, type IShop } from "../models/shop.model.js";
 import { User } from "../models/user.model.js";
+import { RESOURCES } from "../config/permissions.js";
 import { nextShopCode } from "../services/catalogue.service.js";
+import { assertShopInScope, fieldScopeFor } from "../services/field-ops.service.js";
 import { deleteShopImage, saveShopImage, signedImagePath } from "../services/file.service.js";
 import { shopAnalysis, SHOP_ANALYSIS_MONTHS } from "../services/shop-analysis.service.js";
+import { can } from "../services/rbac.service.js";
 import { ApiError } from "../utils/api-error.js";
 import { buildPaginationMeta, created, ok, paginated } from "../utils/api-response.js";
 import { parseListQuery, searchRegex } from "../utils/query.js";
@@ -31,6 +34,10 @@ export async function listShops(req: Request, res: Response) {
   const filter: Record<string, unknown> = {};
   if (req.query.areaId) filter.area_id = req.query.areaId;
   if (req.query.isActive) filter.is_active = req.query.isActive === "true";
+  if (!can(req.user!.permissions, RESOURCES.shops, "view")) {
+    const { filter: fieldScope } = await fieldScopeFor(req.user!.id);
+    filter.$and = [...(Array.isArray(filter.$and) ? filter.$and : []), fieldScope];
+  }
   if (search) {
     const rx = searchRegex(search);
     filter.$or = [
@@ -61,8 +68,15 @@ export async function getShop(req: Request, res: Response) {
 }
 
 /** Which products each shop works with — read by several screens at once. */
-export async function listShopProducts(_req: Request, res: Response) {
-  const links = await ShopProduct.find({}, { shop_id: 1, product_id: 1 }).lean();
+export async function listShopProducts(req: Request, res: Response) {
+  const shopFilter = can(req.user!.permissions, RESOURCES.shops, "view")
+    ? {}
+    : await fieldScopeFor(req.user!.id).then(({ filter }) => filter);
+  const shops = await Shop.find(shopFilter, { _id: 1 }).lean();
+  const links = await ShopProduct.find(
+    { shop_id: { $in: shops.map((shop) => shop._id) } },
+    { shop_id: 1, product_id: 1 },
+  ).lean();
   return ok(res, links.map((l) => ({ shop_id: l.shop_id, product_id: l.product_id })));
 }
 
@@ -288,6 +302,9 @@ export async function removeShopImage(req: Request, res: Response) {
 /* ------------------------------------------------------- analysis & history */
 
 export async function getShopAnalysis(req: Request, res: Response) {
+  if (!can(req.user!.permissions, RESOURCES.shops, "view")) {
+    await assertShopInScope(req.user!.id, req.params.id);
+  }
   const months = Number(req.query.months) || SHOP_ANALYSIS_MONTHS;
   return ok(res, await shopAnalysis(req.params.id, months));
 }
@@ -295,6 +312,9 @@ export async function getShopAnalysis(req: Request, res: Response) {
 /** Everything the Shop Detail page's tabs need, in one round trip. */
 export async function getShopHistory(req: Request, res: Response) {
   const shopId = req.params.id;
+  if (!can(req.user!.permissions, RESOURCES.shops, "view")) {
+    await assertShopInScope(req.user!.id, shopId);
+  }
   if (!(await Shop.exists({ _id: shopId }))) throw ApiError.notFound("Shop not found");
 
   const [orders, deliveries, payments] = await Promise.all([

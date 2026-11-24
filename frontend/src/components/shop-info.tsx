@@ -116,6 +116,11 @@ function ShopInfoList({
 }) {
   const { can } = usePermissions();
   const { data: products = [] } = useQuery(productsQuery);
+  const canViewCollections =
+    can(RESOURCES.fieldOperations, "view") ||
+    can(RESOURCES.fieldOperationsShops, "view") ||
+    can(RESOURCES.fieldOperationsOrders, "view") ||
+    can(RESOURCES.fieldOperationsPayments, "view");
   const history = useQuery({
     queryKey: ["shop_history", shopId],
     queryFn: () => shopsApi.history(shopId),
@@ -123,7 +128,7 @@ function ShopInfoList({
   const collections = useQuery({
     queryKey: ["field_collections", shopId],
     queryFn: () => fieldOpsApi.collections(shopId),
-    enabled: view === "payments" && can(RESOURCES.fieldOperations, "view"),
+    enabled: view === "payments" && canViewCollections,
   });
 
   const describe = useMemo(() => {

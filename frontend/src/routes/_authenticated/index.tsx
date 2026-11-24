@@ -33,11 +33,24 @@ import { MonthPicker } from "@/components/month-picker";
 import { ShopAreaFilter } from "@/components/filter-bar";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { currentFinancialYear, currentMonth, financialYearLabel, monthLabel } from "@/lib/domain";
-import { inr, inrCompact, num } from "@/lib/format";
+import { dateLabel, inr, inrCompact, num, todayISO } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
-import { shopAreasQuery, shopsQuery, summaryByAreaQuery } from "@/lib/queries";
+import {
+  shopAreasQuery,
+  shopsQuery,
+  summaryByAreaQuery,
+  summaryByDateRangeQuery,
+} from "@/lib/queries";
 
 export const Route = createFileRoute("/_authenticated/")({
   component: () => (
@@ -86,10 +99,21 @@ const CHART_COLORS = [
 ];
 
 function Overview() {
+  const [periodMode, setPeriodMode] = useState<"month" | "till-date" | "custom">("month");
   const [fy, setFy] = useState(currentFinancialYear());
   const [month, setMonth] = useState(currentMonth());
+  const [fromDate, setFromDate] = useState(currentMonth());
+  const [toDate, setToDate] = useState(todayISO());
   const [areaFilter, setAreaFilter] = useState("all");
-  const summary = useQuery(summaryByAreaQuery(month, areaFilter));
+  const dateRangeValid = periodMode !== "custom" || (!!fromDate && !!toDate && fromDate <= toDate);
+  const summaryOptions =
+    periodMode === "month"
+      ? summaryByAreaQuery(month, areaFilter)
+      : summaryByDateRangeQuery(
+          periodMode === "till-date" ? { toDate: todayISO() } : { fromDate, toDate },
+          areaFilter,
+        );
+  const summary = useQuery({ ...summaryOptions, enabled: dateRangeValid });
   const shops = useQuery(shopsQuery);
   const areas = useQuery(shopAreasQuery);
 
@@ -102,6 +126,15 @@ function Overview() {
    * collections fell either side of its edge.
    */
   const due = s?.paymentsPending ?? 0;
+  const periodLabel =
+    periodMode === "month"
+      ? `${monthLabel(month)} (${financialYearLabel(fy)})`
+      : periodMode === "till-date"
+        ? `All time through ${dateLabel(todayISO())}`
+        : dateRangeValid
+          ? `${dateLabel(fromDate)} – ${dateLabel(toDate)}`
+          : "Choose a valid date range";
+  const isMonthly = periodMode === "month";
   const areaName =
     areaFilter === "all" ? "All Areas" : (areas.data?.find((a) => a.id === areaFilter)?.name ?? "");
 
@@ -118,10 +151,15 @@ function Overview() {
 
   const exportSummary = () => {
     if (!s) return;
-    downloadCsv(`klinzo-overview-${month}`, [
+    const periodKey =
+      periodMode === "month"
+        ? month
+        : periodMode === "till-date"
+          ? "till-date"
+          : `${fromDate}-to-${toDate}`;
+    downloadCsv(`klinzo-overview-${periodKey}`, [
       {
-        "Financial year": financialYearLabel(fy),
-        Month: monthLabel(month),
+        Period: periodLabel,
         Area: areaName,
         Orders: s.orderCount,
         "Order qty": s.orderQty,
@@ -141,28 +179,64 @@ function Overview() {
     <>
       <PageHeader
         title="Overview"
-        description={`Business performance for ${monthLabel(month)} (${financialYearLabel(fy)}) — ${areaName}`}
+        description={`Business performance for ${periodLabel} — ${areaName}`}
         actions={
           <>
-            {/* Financial year first, then the month it scopes — the same
-                order every other dated page uses. */}
-            <FinancialYearPicker
-              value={fy}
-              onChange={(newFy, suggestedMonth) => {
-                setFy(newFy);
-                setMonth(suggestedMonth);
-              }}
-            />
-            <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
+            <Select
+              value={periodMode}
+              onValueChange={(value) => setPeriodMode(value as typeof periodMode)}
+            >
+              <SelectTrigger className="w-full bg-card sm:w-[175px]" aria-label="Overview period">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">Monthly</SelectItem>
+                <SelectItem value="till-date">Till date (all time)</SelectItem>
+                <SelectItem value="custom">Custom date range</SelectItem>
+              </SelectContent>
+            </Select>
+            {isMonthly ? (
+              <>
+                <FinancialYearPicker
+                  value={fy}
+                  onChange={(newFy, suggestedMonth) => {
+                    setFy(newFy);
+                    setMonth(suggestedMonth);
+                  }}
+                />
+                <MonthPicker value={month} onChange={setMonth} financialYear={fy} />
+              </>
+            ) : periodMode === "custom" ? (
+              <>
+                <Input
+                  type="date"
+                  aria-label="From date"
+                  value={fromDate}
+                  onChange={(event) => setFromDate(event.target.value)}
+                  className="w-full bg-card sm:w-[150px]"
+                />
+                <Input
+                  type="date"
+                  aria-label="To date"
+                  value={toDate}
+                  onChange={(event) => setToDate(event.target.value)}
+                  className="w-full bg-card sm:w-[150px]"
+                />
+              </>
+            ) : null}
             <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
-            <Button variant="outline" onClick={exportSummary} disabled={!s}>
+            <Button variant="outline" onClick={exportSummary} disabled={!s || !dateRangeValid}>
               <Download className="size-4" /> Export
             </Button>
           </>
         }
       />
 
-      {summary.isLoading ? (
+      {!dateRangeValid ? (
+        <div className="surface-card p-6 text-center text-sm text-destructive">
+          The start date must be on or before the end date.
+        </div>
+      ) : summary.isLoading ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
@@ -222,47 +296,49 @@ function Overview() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div className="surface-card p-5 lg:col-span-2">
-          <h2 className="text-base font-semibold">Monthly sales</h2>
-          <p className="text-xs text-muted-foreground">
-            Last 3 months, {areaFilter === "all" ? "whole business" : areaName}
-          </p>
-          <div className="mt-4 h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlySalesBars}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  vertical={false}
-                />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} />
-                <Tooltip
-                  formatter={(v: number) => inr(v)}
-                  contentStyle={{
-                    background: "var(--color-card)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: 12,
-                  }}
-                />
-                <Bar dataKey="Sales" fill="var(--color-chart-1)" radius={[6, 6, 0, 0]}>
-                  <LabelList
-                    dataKey="Sales"
-                    position="top"
-                    fontSize={11}
-                    formatter={(v: number) => inrCompact(v)}
+      <div className={`mt-6 grid gap-4 ${isMonthly ? "lg:grid-cols-3" : ""}`}>
+        {isMonthly && (
+          <div className="surface-card p-5 lg:col-span-2">
+            <h2 className="text-base font-semibold">Monthly sales</h2>
+            <p className="text-xs text-muted-foreground">
+              Last 3 months, {areaFilter === "all" ? "whole business" : areaName}
+            </p>
+            <div className="mt-4 h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlySalesBars}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="var(--color-border)"
+                    vertical={false}
                   />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={12} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} />
+                  <Tooltip
+                    formatter={(v: number) => inr(v)}
+                    contentStyle={{
+                      background: "var(--color-card)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: 12,
+                    }}
+                  />
+                  <Bar dataKey="Sales" fill="var(--color-chart-1)" radius={[6, 6, 0, 0]}>
+                    <LabelList
+                      dataKey="Sales"
+                      position="top"
+                      fontSize={11}
+                      formatter={(v: number) => inrCompact(v)}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="surface-card p-5">
+        <div className={`surface-card p-5 ${isMonthly ? "" : "lg:max-w-2xl"}`}>
           <h2 className="text-base font-semibold">Sales by product</h2>
           <p className="text-xs text-muted-foreground">
-            {monthLabel(month)}, {areaFilter === "all" ? "whole business" : areaName}
+            {periodLabel}, {areaFilter === "all" ? "whole business" : areaName}
           </p>
           <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -299,7 +375,7 @@ function Overview() {
         <div className="surface-card p-5">
           <h2 className="text-base font-semibold">Top 5 performing shops</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            By sales in {monthLabel(month)}, {areaFilter === "all" ? "all areas" : areaName}
+            By sales in {periodLabel}, {areaFilter === "all" ? "all areas" : areaName}
           </p>
           <ul className="mt-4 divide-y divide-border">
             {topShops.map((row, i) => (
@@ -324,7 +400,7 @@ function Overview() {
             ))}
             {topShops.length === 0 && (
               <li className="py-6 text-center text-sm text-muted-foreground">
-                No delivered sales in {monthLabel(month)} yet.
+                No delivered sales in this period yet.
               </li>
             )}
           </ul>

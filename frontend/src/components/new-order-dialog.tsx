@@ -181,7 +181,7 @@ export function NewOrderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-1.5rem)] max-w-xl overflow-y-auto overscroll-contain p-4 sm:max-h-[90vh] sm:p-6">
         <DialogHeader>
           <DialogTitle>{editing ? `Edit order #${editing.order_no}` : "New order"}</DialogTitle>
         </DialogHeader>

@@ -232,7 +232,7 @@ function DirectSellingPage() {
 
       {/* Product-wise breakdown */}
       {byProduct.length > 0 && (
-        <div className="surface-card mb-4 overflow-x-auto">
+        <div className="surface-card mb-4">
           <p className="border-b border-border px-4 py-2 text-sm font-medium">Product-wise sales</p>
           <Table>
             <TableHeader>
@@ -258,7 +258,7 @@ function DirectSellingPage() {
       )}
 
       {/* Sales list */}
-      <div className="surface-card overflow-x-auto">
+      <div className="surface-card">
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <span className="text-sm font-medium">
             {rows.length} sale{rows.length !== 1 ? "s" : ""}

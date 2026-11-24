@@ -46,6 +46,7 @@ import { fieldShopsQuery } from "@/lib/queries";
 import { dateLabel, inr, todayISO } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { fieldOpsApi, type FieldShop } from "@/services/klinzo.service";
+import { PaymentsPage } from "@/routes/_authenticated/payments";
 
 export const Route = createFileRoute("/_authenticated/field-ops")({
   component: () => (
@@ -417,6 +418,36 @@ function NewOrderSection({ shops, scoped }: { shops: FieldShop[]; scoped: boolea
 /* ---------------------------------------------------------------- payments */
 
 function PaymentsSection({ shops }: { shops: FieldShop[] }) {
+  const [tab, setTab] = useState<"payments" | "collections">("payments");
+
+  return (
+    <div className="space-y-4">
+      <div className="inline-flex rounded-xl border border-border bg-card p-1">
+        <Button
+          variant={tab === "payments" ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => setTab("payments")}
+        >
+          Payments
+        </Button>
+        <Button
+          variant={tab === "collections" ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => setTab("collections")}
+        >
+          Collections
+        </Button>
+      </div>
+      {tab === "payments" ? (
+        <PaymentsPage availableShops={shops} />
+      ) : (
+        <CollectionsSection shops={shops} />
+      )}
+    </div>
+  );
+}
+
+function CollectionsSection({ shops }: { shops: FieldShop[] }) {
   const qc = useQueryClient();
   const { user } = useAuth();
   const { can } = usePermissions();

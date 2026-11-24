@@ -1,14 +1,23 @@
 import type { Request, Response } from "express";
 
+import { Collection } from "../models/collection.model.js";
 import { Order, Payment, derivePaymentStatus, type IPayment } from "../models/order.model.js";
 import { Role } from "../models/role.model.js";
 import { Shop } from "../models/shop.model.js";
 import { User } from "../models/user.model.js";
+import {
+  assertShopInScope,
+  fieldRoleOf,
+  fieldScopeFor,
+} from "../services/field-ops.service.js";
+import { can } from "../services/rbac.service.js";
 import { ApiError } from "../utils/api-error.js";
 import { buildPaginationMeta, ok, paginated } from "../utils/api-response.js";
-import { round2 } from "../utils/date.js";
+import { round2, todayIso } from "../utils/date.js";
 import { parseListQuery, searchRegex } from "../utils/query.js";
+import { presentCollection } from "./field-ops.controller.js";
 import { shopIdsForArea, shopRefs, type ShopRef } from "./order.controller.js";
+import { RESOURCES } from "../config/permissions.js";
 
 /**
  * Payments are raised automatically when an order is delivered (see
@@ -68,6 +77,19 @@ function intersectShopIds(filter: Record<string, unknown>, ids: string[] | null)
   }
 }
 
+async function applyFieldShopScope(
+  req: Request,
+  filter: Record<string, unknown>,
+) {
+  if (can(req.user!.permissions, RESOURCES.payments, "view")) return;
+  const { filter: scope } = await fieldScopeFor(req.user!.id);
+  const shops = await Shop.find(scope, { _id: 1 }).lean();
+  intersectShopIds(
+    filter,
+    shops.map((shop) => shop._id),
+  );
+}
+
 export async function listPayments(req: Request, res: Response) {
   const { page, limit, skip, search, sort } = parseListQuery(
     req.query as Record<string, unknown>,
@@ -93,6 +115,7 @@ export async function listPayments(req: Request, res: Response) {
   ]);
   intersectShopIds(filter, areaShopIds);
   intersectShopIds(filter, searchShopIds);
+  await applyFieldShopScope(req, filter);
 
   const [rows, total] = await Promise.all([
     Payment.find(filter).sort(sort).skip(skip).limit(limit).lean(),
@@ -117,6 +140,9 @@ export async function listPayments(req: Request, res: Response) {
 export async function getPayment(req: Request, res: Response) {
   const payment = await Payment.findById(req.params.id).lean();
   if (!payment) throw ApiError.notFound("Payment not found");
+  if (!can(req.user!.permissions, RESOURCES.payments, "view")) {
+    await assertShopInScope(req.user!.id, payment.shop_id);
+  }
   const order = await Order.findById(payment.order_id, { order_no: 1 }).lean();
   const shops = await shopRefs([payment.shop_id]);
   return ok(res, present(payment, shops, new Map(order ? [[order._id, order.order_no]] : [])));
@@ -145,9 +171,90 @@ export async function listCollectors(_req: Request, res: Response) {
   );
 }
 
+export async function listMoneyChanges(req: Request, res: Response) {
+  const filter: Record<string, unknown> = { change_money: { $gt: 0 } };
+  if (req.query.month) {
+    const month = String(req.query.month).slice(0, 7);
+    filter.collection_date = { $gte: `${month}-01`, $lte: `${month}-31` };
+  }
+  if (req.query.shopId) filter.shop_id = req.query.shopId;
+
+  const areaShopIds = await shopIdsForArea(
+    req.query.areaId as string | undefined,
+  );
+  intersectShopIds(filter, areaShopIds);
+  await applyFieldShopScope(req, filter);
+
+  const rows = await Collection.find(filter)
+    .sort({ collection_date: -1, created_at: -1 })
+    .limit(500)
+    .lean();
+  const shops = await shopRefs(rows.map((row) => row.shop_id));
+  return ok(
+    res,
+    rows.map((row) => ({
+      ...presentCollection(row),
+      shop: shops.get(row.shop_id) ?? null,
+    })),
+  );
+}
+
+export async function updateMoneyChange(req: Request, res: Response) {
+  const collection = await Collection.findById(req.params.id);
+  if (!collection || !(collection.change_money > 0)) {
+    throw ApiError.notFound("Money change not found");
+  }
+  const body = req.body as {
+    change_money?: number;
+    collection_date?: string;
+    paid?: boolean;
+    paid_date?: string;
+  };
+  if (!can(req.user!.permissions, RESOURCES.payments, "update")) {
+    await assertShopInScope(req.user!.id, collection.shop_id);
+    if (body.paid !== undefined && (await fieldRoleOf(req.user!.id)) !== "manager") {
+      throw ApiError.forbidden("Only managers can mark change money paid");
+    }
+  }
+
+  if (body.change_money !== undefined)
+    collection.change_money = round2(body.change_money);
+  if (body.collection_date !== undefined)
+    collection.collection_date = body.collection_date;
+  if (body.paid !== undefined) {
+    if (body.paid && collection.change_money <= 0) {
+      throw ApiError.badRequest(
+        "Money change must be greater than zero before it can be marked paid",
+      );
+    }
+    collection.change_money_paid = body.paid;
+    collection.change_money_paid_date = body.paid
+      ? body.paid_date || todayIso()
+      : null;
+    collection.change_money_paid_by = body.paid
+      ? (req.user?.fullName ?? null)
+      : null;
+  }
+  if (collection.change_money <= 0) {
+    collection.change_money_paid = false;
+    collection.change_money_paid_date = null;
+    collection.change_money_paid_by = null;
+  }
+
+  await collection.save();
+  const shops = await shopRefs([collection.shop_id]);
+  return ok(res, {
+    ...presentCollection(collection.toObject()),
+    shop: shops.get(collection.shop_id) ?? null,
+  });
+}
+
 export async function updatePayment(req: Request, res: Response) {
   const payment = await Payment.findById(req.params.id);
   if (!payment) throw ApiError.notFound("Payment not found");
+  if (!can(req.user!.permissions, RESOURCES.payments, "update")) {
+    await assertShopInScope(req.user!.id, payment.shop_id);
+  }
 
   const body = req.body as {
     status?: "Pending" | "Received" | "Partial";

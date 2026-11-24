@@ -179,6 +179,15 @@ export const paymentListQuery = monthListQuery.extend({
   status: z.enum(PAYMENT_STATUSES).optional(),
 });
 
+export const moneyChangeUpdateSchema = z
+  .object({
+    change_money: z.coerce.number().min(0).optional(),
+    collection_date: isoDate.optional(),
+    paid: z.boolean().optional(),
+    paid_date: isoDate.optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, "Provide at least one field to update");
+
 export const paymentUpdateSchema = z
   .object({
     status: z.enum(PAYMENT_STATUSES).optional(),

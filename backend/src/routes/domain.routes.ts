@@ -41,6 +41,7 @@ import {
   labelProductUpdateSchema,
   labelSuggestionQuery,
   makePaymentSchema,
+  moneyChangeUpdateSchema,
   monthListQuery,
   orderCreateSchema,
   orderListQuery,
@@ -382,25 +383,61 @@ export const paymentRouter = Router();
 
 paymentRouter.get(
   "/",
-  authorize(RESOURCES.payments, "view"),
+  authorizeAny([
+    { resource: RESOURCES.payments, action: "view" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+    { resource: RESOURCES.fieldOperations, action: "view" },
+  ]),
   validate({ query: paymentListQuery }),
   asyncHandler(payments.listPayments),
 );
 /** People a payment can be "Collected by" — see the controller for who qualifies. */
 paymentRouter.get(
   "/collectors",
-  authorize(RESOURCES.payments, "view"),
+  authorizeAny([
+    { resource: RESOURCES.payments, action: "view" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+    { resource: RESOURCES.fieldOperations, action: "view" },
+  ]),
   asyncHandler(payments.listCollectors),
 );
 paymentRouter.get(
+  "/change-money",
+  authorizeAny([
+    { resource: RESOURCES.payments, action: "view" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+    { resource: RESOURCES.fieldOperations, action: "view" },
+  ]),
+  validate({ query: monthListQuery }),
+  asyncHandler(payments.listMoneyChanges),
+);
+paymentRouter.patch(
+  "/change-money/:id",
+  authorizeAny([
+    { resource: RESOURCES.payments, action: "update" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+    { resource: RESOURCES.fieldOperations, action: "view" },
+  ]),
+  validate({ params: idParam, body: moneyChangeUpdateSchema }),
+  asyncHandler(payments.updateMoneyChange),
+);
+paymentRouter.get(
   "/:id",
-  authorize(RESOURCES.payments, "view"),
+  authorizeAny([
+    { resource: RESOURCES.payments, action: "view" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+    { resource: RESOURCES.fieldOperations, action: "view" },
+  ]),
   validate({ params: idParam }),
   asyncHandler(payments.getPayment),
 );
 paymentRouter.patch(
   "/:id",
-  authorize(RESOURCES.payments, "update"),
+  authorizeAny([
+    { resource: RESOURCES.payments, action: "update" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+    { resource: RESOURCES.fieldOperations, action: "view" },
+  ]),
   validate({ params: idParam, body: paymentUpdateSchema }),
   asyncHandler(payments.updatePayment),
 );
@@ -571,6 +608,7 @@ fieldOpsRouter.get(
   authorizeAny([
     { resource: RESOURCES.fieldOperations, action: "view" },
     { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+    { resource: RESOURCES.payments, action: "update" },
   ]),
   validate({ params: idParam }),
   asyncHandler(fieldOps.getPendingPayments),
@@ -580,6 +618,7 @@ fieldOpsRouter.get(
   authorizeAny([
     { resource: RESOURCES.fieldOperations, action: "view" },
     { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+    { resource: RESOURCES.payments, action: "update" },
   ]),
   validate({ params: idParam }),
   asyncHandler(fieldOps.listShopPayments),
@@ -587,6 +626,8 @@ fieldOpsRouter.get(
 fieldOpsRouter.get(
   "/shops/:id/collections",
   authorizeAny([
+    { resource: RESOURCES.payments, action: "view" },
+    { resource: RESOURCES.payments, action: "update" },
     { resource: RESOURCES.fieldOperations, action: "view" },
     { resource: RESOURCES.fieldOperationsShops, action: "view" },
     { resource: RESOURCES.fieldOperationsOrders, action: "view" },
@@ -601,6 +642,8 @@ fieldOpsRouter.post(
   authorizeAny([
     { resource: RESOURCES.fieldOperations, action: "create" },
     { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+    { resource: RESOURCES.payments, action: "update" },
+    { resource: RESOURCES.fieldOperations, action: "view" },
   ]),
   validate({ params: idParam, body: makePaymentSchema }),
   asyncHandler(fieldOps.makePayment),
@@ -611,6 +654,7 @@ fieldOpsRouter.delete(
   authorizeAny([
     { resource: RESOURCES.payments, action: "update" },
     { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+    { resource: RESOURCES.fieldOperations, action: "view" },
   ]),
   validate({ params: idParam }),
   asyncHandler(fieldOps.deleteCollection),

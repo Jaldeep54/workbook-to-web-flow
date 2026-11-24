@@ -212,6 +212,17 @@ export type PaymentCollector = {
 export const paymentsApi = {
   list: (params: { month?: string; shopId?: string; areaId?: string; status?: string }) =>
     api.get<PaymentRecord[]>("/payments", { ...params, limit: 500 }),
+  moneyChanges: (params: { month?: string; shopId?: string; areaId?: string }) =>
+    api.get<MoneyChangeRecord[]>("/payments/change-money", params),
+  updateMoneyChange: (
+    id: string,
+    payload: {
+      change_money?: number;
+      collection_date?: string;
+      paid?: boolean;
+      paid_date?: string;
+    },
+  ) => api.patch<MoneyChangeRecord>(`/payments/change-money/${id}`, payload),
   /** Active user accounts, for the "Collected by" picker. */
   collectors: () => api.get<PaymentCollector[]>("/payments/collectors"),
   update: (
@@ -609,6 +620,10 @@ export type CollectionRecord = {
   change_money_paid_date: string | null;
   change_money_paid_by: string | null;
   created_at: string;
+};
+
+export type MoneyChangeRecord = CollectionRecord & {
+  shop: ShopRef;
 };
 
 export const fieldOpsApi = {

@@ -121,6 +121,18 @@ describe("Field operations and team dashboards", () => {
   });
 
   it("applies a collection only to the bills and amounts explicitly selected", async () => {
+    const outsideOrder = await admin.post("/orders").send({
+      shop_id: otherShopId,
+      order_date: "2026-09-04",
+      delivery_date: "2026-09-04",
+      order_lines: [{ product_id: productId, qty: 1 }],
+    });
+    expect(outsideOrder.status).toBe(201);
+    await admin
+      .patch(`/orders/${outsideOrder.body.data.id}/status`)
+      .send({ status: "Delivered" })
+      .expect(200);
+
     // Created out of date order, to prove allocation follows delivery date.
     await deliveredOrder(ownShopId, "2026-09-03", 4);
     await deliveredOrder(ownShopId, "2026-09-01", 2);
@@ -179,6 +191,14 @@ describe("Field operations and team dashboards", () => {
     const bills = await manager.get(`/field-ops/shops/${ownShopId}/payments`);
     expect(bills.status).toBe(200);
     expect(bills.body.data).toHaveLength(3);
+    const sharedPayments = await manager.get("/payments?month=2026-09-01");
+    expect(sharedPayments.status).toBe(200);
+    expect(sharedPayments.body.data).toHaveLength(3);
+    expect(
+      sharedPayments.body.data.every(
+        (p: { shop_id: string }) => p.shop_id === ownShopId,
+      ),
+    ).toBe(true);
     const collectedBill = bills.body.data.find(
       (bill: { id: string }) => bill.id === third.payment_id,
     );
@@ -189,6 +209,48 @@ describe("Field operations and team dashboards", () => {
       collected_date: "2026-09-05",
       order_no: expect.any(Number),
     });
+    await manager
+      .patch(`/payments/${third.payment_id}`)
+      .send({ expected_collection_date: "2026-09-12" })
+      .expect(200);
+    expect(
+      (
+        await manager.get(`/field-ops/shops/${ownShopId}/payments`)
+      ).body.data.find((bill: { id: string }) => bill.id === third.payment_id)
+        .expected_collection_date,
+    ).toBe("2026-09-12");
+    const outsidePayment = (
+      await admin.get(`/payments?shopId=${otherShopId}&month=2026-09-01`)
+    ).body.data[0];
+    expectError(await manager.get(`/payments/${outsidePayment.id}`), 404);
+    const moneyChanges = await manager.get(
+      "/payments/change-money?month=2026-09-01",
+    );
+    expect(moneyChanges.status).toBe(200);
+    expect(moneyChanges.body.data).toHaveLength(1);
+    expect(moneyChanges.body.data[0]).toMatchObject({
+      shop_id: ownShopId,
+      change_money: 20,
+      change_money_paid: false,
+    });
+    const changeId = moneyChanges.body.data[0].id;
+    await manager
+      .patch(`/payments/change-money/${changeId}`)
+      .send({ change_money: 21 })
+      .expect(200);
+    await manager
+      .patch(`/payments/change-money/${changeId}`)
+      .send({ change_money: 20 })
+      .expect(200);
+    await manager
+      .patch(`/payments/change-money/${changeId}`)
+      .send({ paid: true, paid_date: "2026-09-06" })
+      .expect(200);
+    await manager
+      .patch(`/payments/change-money/${changeId}`)
+      .send({ paid: false })
+      .expect(200);
+
     const shopList = await manager.get("/field-ops/shops");
     const ownShop = shopList.body.data.shops.find(
       (s: { id: string }) => s.id === ownShopId,
@@ -287,6 +349,64 @@ describe("Field operations and team dashboards", () => {
       }),
       404,
     );
+
+    const paymentOnly = await createRoleWithUser(admin, {
+      roleName: "Payments Tab Only",
+      email: "field.payments.only@example.com",
+      permissions: ["field_operations_payments:view"],
+    });
+    await admin
+      .patch(`/roles/${paymentOnly.roleId}`)
+      .send({ fieldRole: "manager" });
+    const paymentShop = await admin.post("/shops").send({
+      code: "FO4",
+      shop_name: "Payments Tab Shop",
+      area_id: areaId,
+      handled_by_user_id: paymentOnly.userId,
+      product_ids: [productId],
+    });
+    const ownPaymentOrder = await admin.post("/orders").send({
+      shop_id: paymentShop.body.data.id,
+      order_date: "2026-10-12",
+      delivery_date: "2026-10-12",
+      order_lines: [{ product_id: productId, qty: 1 }],
+    });
+    await admin
+      .patch(`/orders/${ownPaymentOrder.body.data.id}/status`)
+      .send({ status: "Delivered" })
+      .expect(200);
+    const outsidePaymentOrder = await admin.post("/orders").send({
+      shop_id: otherShopId,
+      order_date: "2026-10-13",
+      delivery_date: "2026-10-13",
+      order_lines: [{ product_id: productId, qty: 1 }],
+    });
+    await admin
+      .patch(`/orders/${outsidePaymentOrder.body.data.id}/status`)
+      .send({ status: "Delivered" })
+      .expect(200);
+
+    const paymentRows = await paymentOnly.agent.get(
+      "/payments?month=2026-10-01",
+    );
+    expect(paymentRows.status).toBe(200);
+    expect(paymentRows.body.data).toHaveLength(1);
+    expect(paymentRows.body.data[0].shop_id).toBe(paymentShop.body.data.id);
+    expect((await paymentOnly.agent.get("/payments/collectors")).status).toBe(
+      200,
+    );
+    const outsidePayment = (
+      await admin.get(`/payments?shopId=${otherShopId}&month=2026-10-01`)
+    ).body.data[0];
+    expectError(
+      await paymentOnly.agent.get(`/payments/${outsidePayment.id}`),
+      404,
+    );
+    const accessiblePayment = paymentRows.body.data[0];
+    await paymentOnly.agent
+      .patch(`/payments/${accessiblePayment.id}`)
+      .send({ expected_collection_date: "2026-10-19" })
+      .expect(200);
   });
 
   it("lists the manager's activity with totals", async () => {

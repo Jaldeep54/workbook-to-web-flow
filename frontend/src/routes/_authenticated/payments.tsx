@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { PaymentMoneyChangeDialog } from "@/components/payment-money-change-dialog";
 import {
   Select,
   SelectContent,
@@ -32,8 +33,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { RequirePermission } from "@/components/require-permission";
+import { useAuth } from "@/hooks/useAuth";
 import { RESOURCES, usePermissions } from "@/hooks/usePermissions";
-import { paymentsApi, type PaymentCollector } from "@/services/klinzo.service";
+import {
+  paymentsApi,
+  type FieldShop,
+  type PaymentCollector,
+  type ShopWithImage,
+} from "@/services/klinzo.service";
 import { shopsQuery } from "@/lib/queries";
 import { paymentCollectorsQuery, paymentsQuery, type PaymentRecord } from "@/lib/records";
 import { currentFinancialYear, currentMonth, monthLabel } from "@/lib/domain";
@@ -92,10 +99,20 @@ type RowProps = {
  * Both are driven by the same state and the same mutations, and both render
  * the same four controls below, so the two can never drift apart.
  */
-function PaymentsPage() {
+export function PaymentsPage({
+  availableShops,
+}: {
+  availableShops?: FieldShop[] | ShopWithImage[];
+} = {}) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const { can } = usePermissions();
-  const canUpdate = can(RESOURCES.payments, "update");
+  const canUpdate =
+    can(RESOURCES.payments, "update") ||
+    can(RESOURCES.fieldOperationsPayments, "view") ||
+    can(RESOURCES.fieldOperations, "view");
+  const canManagePaid =
+    canUpdate && (can(RESOURCES.payments, "update") || user?.role?.fieldRole === "manager");
 
   const [fy, setFy] = useState(currentFinancialYear());
   const [month, setMonth] = useState(currentMonth());
@@ -105,7 +122,11 @@ function PaymentsPage() {
   const [statusSort, setStatusSort] = useState<"none" | "asc" | "desc">("none");
   const [search, setSearch] = useState("");
 
-  const { data: shops = [] } = useQuery(shopsQuery);
+  const { data: queriedShops = [] } = useQuery({
+    ...shopsQuery,
+    enabled: !availableShops,
+  });
+  const shops = availableShops ?? queriedShops;
   const { data: collectors = [] } = useQuery(paymentCollectorsQuery);
   const { data: allPayments = [], isLoading } = useQuery(paymentsQuery(month, shopFilter));
 
@@ -190,10 +211,15 @@ function PaymentsPage() {
       );
       for (const key of [
         "payments",
+        "field_pending",
+        "field_shop_payments",
+        "field_collections",
+        "money_changes",
         "dashboard_summary",
         "cash_position_summary",
         "available_months",
         "shop_history",
+        "team_activity",
       ]) {
         void qc.invalidateQueries({ queryKey: [key] });
       }
@@ -301,6 +327,14 @@ function PaymentsPage() {
             >
               <Download className="size-4" /> Export
             </Button>
+            <PaymentMoneyChangeDialog
+              shops={shops}
+              month={month}
+              shopId={shopFilter}
+              areaId={areaFilter}
+              canUpdate={canUpdate}
+              canManagePaid={canManagePaid}
+            />
           </>
         }
       />

@@ -242,10 +242,12 @@ payment has already been received.
 
 | Method | Path | Permission |
 |---|---|---|
-| GET | `/payments?month=&shopId=&areaId=&status=&search=` | `payments:view` |
-| GET | `/payments/collectors` | `payments:view` |
-| GET | `/payments/:id` | `payments:view` |
-| PATCH | `/payments/:id` | `payments:update` |
+| GET | `/payments?month=&shopId=&areaId=&status=&search=` | `payments:view` or Field Operations Payments view |
+| GET | `/payments/collectors` | `payments:view` or Field Operations Payments view |
+| GET | `/payments/:id` | `payments:view` or Field Operations Payments view |
+| PATCH | `/payments/:id` | `payments:update` or Field Operations Payments view |
+| GET | `/payments/change-money?month=&shopId=&areaId=` | `payments:view` or Field Operations Payments view |
+| PATCH | `/payments/change-money/:id` | `payments:update` or Field Operations Payments view |
 
 Payments are raised by the delivery flow — there is no create endpoint.
 
@@ -275,6 +277,15 @@ deactivated.
 `search` matches the payment's shop by name, billing name, label or code, and
 intersects with `areaId` and `shopId` rather than replacing them.
 
+The Field Operations Payments screen uses these same payment records and
+endpoints, automatically restricted to the signed-in field user's shops.
+Money-change records are the existing collection records with a positive
+`change_money`; the Payments screen can record a collection with bill
+allocations and change, adjust the change amount, and mark it paid or unpaid.
+Changing payment or change-money data is reflected by the collection, bill,
+cash-position and team activity views because no duplicate payment ledger is
+created.
+
 > Payments written before `amount_received` existed are filled in by
 > `npm run seed`, which treats a `Received` row as fully paid and every other
 > row as unpaid.
@@ -294,6 +305,10 @@ grant remains supported as access to all four tabs.
 | GET | `/field-ops/shops/:id/collections` | Shops, New Order or Payments tab |
 | POST | `/field-ops/shops/:id/collections` | Payments tab |
 | DELETE | `/field-ops/collections/:id` | Payments tab |
+
+Field Operations → Payments embeds the complete Payments screen (including
+filters, export, bill collection details and Money Change) over the same
+payment API, and retains the per-shop collection workflow.
 
 `GET /field-ops/shops/:id/payments` lists every bill for the in-scope shop,
 including settled bills, with received amount, balance, status, collector,

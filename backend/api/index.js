@@ -23,13 +23,14 @@ let connecting;
 
 async function ready() {
   if (mongoose.connection.readyState === 1) return;
-  // A failed connection must not be cached, or the instance stays broken for
-  // the rest of its life.
-  connecting ??= connectDatabase().catch((error) => {
+  // The connection can also drop between invocations, so never cache a
+  // resolved promise as a substitute for checking `readyState`.
+  connecting ??= connectDatabase();
+  try {
+    await connecting;
+  } finally {
     connecting = undefined;
-    throw error;
-  });
-  await connecting;
+  }
 }
 
 /**

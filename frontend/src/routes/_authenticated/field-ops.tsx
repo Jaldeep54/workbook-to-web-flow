@@ -452,6 +452,11 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
     queryFn: () => fieldOpsApi.collections(shopId),
     enabled: !!shopId,
   });
+  const payments = useQuery({
+    queryKey: ["field_shop_payments", shopId],
+    queryFn: () => fieldOpsApi.payments(shopId),
+    enabled: !!shopId,
+  });
   const collectors = useQuery({
     queryKey: ["field_collectors"],
     queryFn: () => fieldOpsApi.collectors(),
@@ -479,6 +484,7 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
     for (const key of [
       "field_pending",
       "field_collections",
+      "field_shop_payments",
       "payments",
       "shop_history",
       "dashboard_summary",
@@ -626,7 +632,7 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
 
               <div className="rounded-lg border border-border">
                 <p className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
-                  Enter the amount to apply to each bill
+                  Money Added — enter the amount collected for each bill
                 </p>
                 <div className="divide-y divide-border">
                   {(pending.data?.deliveries ?? []).map((delivery) => (
@@ -647,22 +653,31 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
                           Balance {inr(delivery.balance, 2)}
                         </p>
                       </div>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        max={delivery.balance}
-                        step="0.01"
-                        value={allocationAmounts[delivery.payment_id] ?? ""}
-                        onChange={(event) =>
-                          setAllocationAmounts((current) => ({
-                            ...current,
-                            [delivery.payment_id]: event.target.value,
-                          }))
-                        }
-                        aria-label={`Amount to apply to order ${delivery.order_no ?? ""}`}
-                        placeholder="0.00"
-                      />
+                      <div className="space-y-1">
+                        <Label
+                          className="text-[11px] text-muted-foreground"
+                          htmlFor={`money-added-${delivery.payment_id}`}
+                        >
+                          Money Added
+                        </Label>
+                        <Input
+                          id={`money-added-${delivery.payment_id}`}
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          max={delivery.balance}
+                          step="0.01"
+                          value={allocationAmounts[delivery.payment_id] ?? ""}
+                          onChange={(event) =>
+                            setAllocationAmounts((current) => ({
+                              ...current,
+                              [delivery.payment_id]: event.target.value,
+                            }))
+                          }
+                          aria-label={`Money added to order ${delivery.order_no ?? ""}`}
+                          placeholder="0.00"
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -687,6 +702,115 @@ function PaymentsSection({ shops }: { shops: FieldShop[] }) {
               </Button>
             </div>
           )}
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Bills and payment details
+            </p>
+            <div className="surface-card overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Shop</TableHead>
+                      <TableHead className="text-right">Order</TableHead>
+                      <TableHead className="whitespace-nowrap text-right">Bill amount</TableHead>
+                      <TableHead className="text-right">Received</TableHead>
+                      <TableHead className="text-right">Balance</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Collected by</TableHead>
+                      <TableHead className="whitespace-nowrap">Date of collection</TableHead>
+                      <TableHead className="whitespace-nowrap">Expected collection date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payments.isLoading && (
+                      <TableRow>
+                        <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
+                          Loading payments…
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {payments.isError && (
+                      <TableRow>
+                        <TableCell colSpan={10} className="py-8 text-center text-destructive">
+                          Could not load bills: {payments.error.message}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!payments.isLoading &&
+                      !payments.isError &&
+                      (payments.data ?? []).length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={10}
+                            className="py-8 text-center text-muted-foreground"
+                          >
+                            No bills for this shop yet.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    {(payments.data ?? []).map((payment) => (
+                      <TableRow key={payment.id}>
+                        <TableCell className="whitespace-nowrap">
+                          {dateLabel(payment.payment_date)}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {selectedShop?.shop_name ?? "—"}
+                          {selectedShop?.label_name && (
+                            <p className="text-xs text-muted-foreground">
+                              {selectedShop.label_name}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell className="num text-right">{payment.order_no ?? "—"}</TableCell>
+                        <TableCell className="num text-right font-semibold">
+                          {inr(payment.amount)}
+                        </TableCell>
+                        <TableCell className="num text-right">
+                          {inr(payment.amount_received)}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "num text-right font-semibold",
+                            payment.balance > 0 ? "text-destructive" : "text-success",
+                          )}
+                        >
+                          {payment.balance > 0 ? inr(payment.balance) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={cn(
+                              "whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium",
+                              payment.status === "Received"
+                                ? "bg-success/10 text-success"
+                                : payment.status === "Partial"
+                                  ? "bg-warning/10 text-warning"
+                                  : "bg-muted text-muted-foreground",
+                            )}
+                          >
+                            {payment.status === "Received"
+                              ? "Paid in full"
+                              : payment.status === "Partial"
+                                ? "Part paid"
+                                : "Not paid"}
+                          </span>
+                        </TableCell>
+                        <TableCell>{payment.collected_by ?? "Nobody yet"}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {dateLabel(payment.collected_date)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {dateLabel(payment.expected_collection_date)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </div>
 
           <div className="space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

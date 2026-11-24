@@ -46,12 +46,15 @@ describe("Field operations and team dashboards", () => {
     });
     manager = created.agent;
     managerId = created.userId;
-    await admin.patch(`/roles/${created.roleId}`).send({ fieldRole: "manager" });
+    await admin
+      .patch(`/roles/${created.roleId}`)
+      .send({ fieldRole: "manager" });
 
     const products = (await admin.get("/products")).body.data;
     productId = products[0].id;
     price = Number(products[0].selling_price);
-    areaId = (await admin.post("/shop-areas").send({ name: "Vesu" })).body.data.id;
+    areaId = (await admin.post("/shop-areas").send({ name: "Vesu" })).body.data
+      .id;
 
     const own = await admin.post("/shops").send({
       code: "FO1",
@@ -80,7 +83,9 @@ describe("Field operations and team dashboards", () => {
       order_lines: [{ product_id: productId, qty }],
     });
     expect(order.status).toBe(201);
-    await manager.patch(`/orders/${order.body.data.id}/status`).send({ status: "Delivered" });
+    await manager
+      .patch(`/orders/${order.body.data.id}/status`)
+      .send({ status: "Delivered" });
     return order.body.data.id as string;
   }
 
@@ -88,16 +93,29 @@ describe("Field operations and team dashboards", () => {
     let list = await manager.get("/field-ops/shops");
     expect(list.status).toBe(200);
     expect(list.body.data.scope).toBe("manager");
-    expect(list.body.data.shops.map((s: { id: string }) => s.id)).toEqual([ownShopId]);
+    expect(list.body.data.shops.map((s: { id: string }) => s.id)).toEqual([
+      ownShopId,
+    ]);
 
-    expectError(await manager.get(`/field-ops/shops/${otherShopId}/pending`), 404);
+    expectError(
+      await manager.get(`/field-ops/shops/${otherShopId}/pending`),
+      404,
+    );
+    expectError(
+      await manager.get(`/field-ops/shops/${otherShopId}/payments`),
+      404,
+    );
 
-    const grant = await admin.post(`/team/managers/${managerId}/shops`).send({ all: true });
+    const grant = await admin
+      .post(`/team/managers/${managerId}/shops`)
+      .send({ all: true });
     expect(grant.status).toBe(200);
     list = await manager.get("/field-ops/shops");
     expect(list.body.data.shops).toHaveLength(2);
 
-    await admin.delete(`/team/managers/${managerId}/shops/${otherShopId}`).expect(200);
+    await admin
+      .delete(`/team/managers/${managerId}/shops/${otherShopId}`)
+      .expect(200);
     list = await manager.get("/field-ops/shops");
     expect(list.body.data.shops).toHaveLength(1);
   });
@@ -109,16 +127,21 @@ describe("Field operations and team dashboards", () => {
     await deliveredOrder(ownShopId, "2026-09-02", 3);
 
     const pending = await manager.get(`/field-ops/shops/${ownShopId}/pending`);
-    expect(pending.body.data.deliveries.map((d: { delivery_date: string }) => d.delivery_date)).toEqual([
-      "2026-09-01",
-      "2026-09-02",
-      "2026-09-03",
-    ]);
+    expect(
+      pending.body.data.deliveries.map(
+        (d: { delivery_date: string }) => d.delivery_date,
+      ),
+    ).toEqual(["2026-09-01", "2026-09-02", "2026-09-03"]);
     expect(pending.body.data.total_pending).toBe(9 * price);
 
     expectError(
       await manager.post(`/field-ops/shops/${ownShopId}/collections`).send({
-        allocations: [{ payment_id: pending.body.data.deliveries[0].payment_id, amount: 10 * price }],
+        allocations: [
+          {
+            payment_id: pending.body.data.deliveries[0].payment_id,
+            amount: 10 * price,
+          },
+        ],
       }),
       400,
     );
@@ -139,21 +162,57 @@ describe("Field operations and team dashboards", () => {
     expect(paid.status).toBe(201);
     expect(paid.body.data.collection.amount).toBeCloseTo(amount, 2);
     expect(paid.body.data.collection.allocations).toEqual([
-      { payment_id: third.payment_id, order_id: third.order_id, amount: 1.5 * price },
+      {
+        payment_id: third.payment_id,
+        order_id: third.order_id,
+        amount: 1.5 * price,
+      },
       { payment_id: first.payment_id, order_id: first.order_id, amount: price },
     ]);
     expect(paid.body.data.total_pending).toBeCloseTo(9 * price - amount, 2);
 
     const after = await manager.get(`/field-ops/shops/${ownShopId}/pending`);
     expect(after.body.data.deliveries).toHaveLength(3);
-    expect(after.body.data.deliveries.map((d: { balance: number }) => d.balance)).toEqual([
-      price,
-      3 * price,
-      2.5 * price,
-    ]);
+    expect(
+      after.body.data.deliveries.map((d: { balance: number }) => d.balance),
+    ).toEqual([price, 3 * price, 2.5 * price]);
+    const bills = await manager.get(`/field-ops/shops/${ownShopId}/payments`);
+    expect(bills.status).toBe(200);
+    expect(bills.body.data).toHaveLength(3);
+    const collectedBill = bills.body.data.find(
+      (bill: { id: string }) => bill.id === third.payment_id,
+    );
+    expect(collectedBill).toMatchObject({
+      amount_received: 1.5 * price,
+      balance: 2.5 * price,
+      collected_by: expect.any(String),
+      collected_date: "2026-09-05",
+      order_no: expect.any(Number),
+    });
     const shopList = await manager.get("/field-ops/shops");
-    const ownShop = shopList.body.data.shops.find((s: { id: string }) => s.id === ownShopId);
+    const ownShop = shopList.body.data.shops.find(
+      (s: { id: string }) => s.id === ownShopId,
+    );
     expect(ownShop.pending_balance).toBeCloseTo(9 * price - amount, 2);
+
+    await admin
+      .patch(`/payments/${first.payment_id}`)
+      .send({ amount_received: 2 * price })
+      .expect(200);
+    const billsAfterSettlement = await manager.get(
+      `/field-ops/shops/${ownShopId}/payments`,
+    );
+    expect(billsAfterSettlement.body.data).toHaveLength(3);
+    expect(
+      billsAfterSettlement.body.data.find(
+        (bill: { id: string }) => bill.id === first.payment_id,
+      ),
+    ).toMatchObject({
+      amount_received: 2 * price,
+      balance: 0,
+      status: "Received",
+      collected_date: "2026-09-05",
+    });
   });
 
   it("grants a single Field Operations tab without exposing the other tabs", async () => {
@@ -162,7 +221,9 @@ describe("Field operations and team dashboards", () => {
       email: "field.order.only@example.com",
       permissions: ["field_operations_orders:view"],
     });
-    await admin.patch(`/roles/${created.roleId}`).send({ fieldRole: "manager" });
+    await admin
+      .patch(`/roles/${created.roleId}`)
+      .send({ fieldRole: "manager" });
     const shop = await admin.post("/shops").send({
       code: "FO3",
       shop_name: "Order Tab Shop",
@@ -189,11 +250,25 @@ describe("Field operations and team dashboards", () => {
 
     const fieldShops = await created.agent.get("/field-ops/shops");
     expect(fieldShops.status).toBe(200);
-    expect(fieldShops.body.data.shops.map((s: { id: string }) => s.id)).toEqual([shop.body.data.id]);
+    expect(fieldShops.body.data.shops.map((s: { id: string }) => s.id)).toEqual(
+      [shop.body.data.id],
+    );
     expect((await created.agent.get("/products")).status).toBe(200);
-    expect((await created.agent.get(`/orders?date=2026-10-10`)).status).toBe(200);
-    expectError(await created.agent.get(`/field-ops/shops/${shop.body.data.id}/pending`), 403);
-    expectError(await created.agent.get("/orders/delivery-sheet?date=2026-10-10"), 403);
+    expect((await created.agent.get(`/orders?date=2026-10-10`)).status).toBe(
+      200,
+    );
+    expectError(
+      await created.agent.get(`/field-ops/shops/${shop.body.data.id}/pending`),
+      403,
+    );
+    expectError(
+      await created.agent.get(`/field-ops/shops/${shop.body.data.id}/payments`),
+      403,
+    );
+    expectError(
+      await created.agent.get("/orders/delivery-sheet?date=2026-10-10"),
+      403,
+    );
     expectError(await created.agent.get("/payments"), 403);
 
     const order = await created.agent.post("/orders").send({
@@ -215,16 +290,22 @@ describe("Field operations and team dashboards", () => {
   });
 
   it("lists the manager's activity with totals", async () => {
-    const orders = await admin.get(`/team/managers/${managerId}/activity?type=orders&month=2026-09`);
+    const orders = await admin.get(
+      `/team/managers/${managerId}/activity?type=orders&month=2026-09`,
+    );
     expect(orders.status).toBe(200);
     expect(orders.body.data.summary.count).toBe(3);
     expect(orders.body.data.summary.qty).toBe(9);
 
-    const deliveries = await admin.get(`/team/managers/${managerId}/activity?type=deliveries&year=2026`);
+    const deliveries = await admin.get(
+      `/team/managers/${managerId}/activity?type=deliveries&year=2026`,
+    );
     expect(deliveries.body.data.summary.count).toBe(3);
     expect(deliveries.body.data.summary.total).toBe(9 * price);
 
-    const collections = await admin.get(`/team/managers/${managerId}/activity?type=collections`);
+    const collections = await admin.get(
+      `/team/managers/${managerId}/activity?type=collections`,
+    );
     expect(collections.body.data.summary.total).toBeCloseTo(2.5 * price, 2);
   });
 
@@ -232,11 +313,16 @@ describe("Field operations and team dashboards", () => {
     const before = (await admin.get("/cash-position/summary")).body.data;
     expect(before.changeMoneyPaidTotal).toBe(0);
 
-    const change = await admin.get(`/team/managers/${managerId}/activity?type=change_money`);
+    const change = await admin.get(
+      `/team/managers/${managerId}/activity?type=change_money`,
+    );
     expect(change.body.data.summary.unpaid).toBe(20);
     const collectionId = change.body.data.rows[0].id;
 
-    await admin.patch(`/team/managers/change-money/${collectionId}`).send({ paid: true }).expect(200);
+    await admin
+      .patch(`/team/managers/change-money/${collectionId}`)
+      .send({ paid: true })
+      .expect(200);
     const after = (await admin.get("/cash-position/summary")).body.data;
     expect(after.changeMoneyPaidTotal).toBe(20);
     expect(after.moneyInHand).toBe(before.moneyInHand - 20);
@@ -245,6 +331,8 @@ describe("Field operations and team dashboards", () => {
   it("keeps team dashboards behind their own permission", async () => {
     expectError(await manager.get("/team/managers"), 403);
     const list = await admin.get("/team/managers");
-    expect(list.body.data.map((m: { id: string }) => m.id)).toContain(managerId);
+    expect(list.body.data.map((m: { id: string }) => m.id)).toContain(
+      managerId,
+    );
   });
 });

@@ -576,6 +576,15 @@ fieldOpsRouter.get(
   asyncHandler(fieldOps.getPendingPayments),
 );
 fieldOpsRouter.get(
+  "/shops/:id/payments",
+  authorizeAny([
+    { resource: RESOURCES.fieldOperations, action: "view" },
+    { resource: RESOURCES.fieldOperationsPayments, action: "view" },
+  ]),
+  validate({ params: idParam }),
+  asyncHandler(fieldOps.listShopPayments),
+);
+fieldOpsRouter.get(
   "/shops/:id/collections",
   authorizeAny([
     { resource: RESOURCES.fieldOperations, action: "view" },

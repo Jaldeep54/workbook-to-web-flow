@@ -290,9 +290,14 @@ grant remains supported as access to all four tabs.
 |---|---|---|
 | GET | `/field-ops/shops` | any Field Operations tab |
 | GET | `/field-ops/shops/:id/pending` | Payments tab |
+| GET | `/field-ops/shops/:id/payments` | Payments tab |
 | GET | `/field-ops/shops/:id/collections` | Shops, New Order or Payments tab |
 | POST | `/field-ops/shops/:id/collections` | Payments tab |
 | DELETE | `/field-ops/collections/:id` | Payments tab |
+
+`GET /field-ops/shops/:id/payments` lists every bill for the in-scope shop,
+including settled bills, with received amount, balance, status, collector,
+collection date and expected collection date.
 
 `POST /field-ops/shops/:id/collections` accepts explicit bill allocations:
 

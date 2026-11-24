@@ -582,6 +582,20 @@ export type PendingDelivery = {
   balance: number;
 };
 
+/** A bill in Field Operations, including settled bills and collection details. */
+export type FieldOpsPayment = {
+  id: string;
+  payment_date: string | null;
+  amount: number;
+  amount_received: number;
+  balance: number;
+  status: string;
+  collected_by: string | null;
+  collected_date: string | null;
+  expected_collection_date: string | null;
+  order_no: number | null;
+};
+
 export type CollectionRecord = {
   id: string;
   shop_id: string;
@@ -606,6 +620,7 @@ export const fieldOpsApi = {
     api.get<{ shop_id: string; total_pending: number; deliveries: PendingDelivery[] }>(
       `/field-ops/shops/${shopId}/pending`,
     ),
+  payments: (shopId: string) => api.get<FieldOpsPayment[]>(`/field-ops/shops/${shopId}/payments`),
   collections: (shopId: string) =>
     api.get<CollectionRecord[]>(`/field-ops/shops/${shopId}/collections`),
   makePayment: (

@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 
 import { Collection, type ICollection } from "../models/collection.model.js";
-import { Payment } from "../models/order.model.js";
+import { Order, Payment } from "../models/order.model.js";
 import { Shop, ShopArea } from "../models/shop.model.js";
 import { User } from "../models/user.model.js";
 import {
@@ -97,6 +97,39 @@ export async function getPendingPayments(req: Request, res: Response) {
     total_pending: round2(deliveries.reduce((sum, d) => sum + d.balance, 0)),
     deliveries,
   });
+}
+
+/** Every bill for a shop, including settled bills, with the Payments-tab details. */
+export async function listShopPayments(req: Request, res: Response) {
+  const shopId = req.params.id;
+  await assertShopInScope(req.user!.id, shopId);
+
+  const rows = await Payment.find({ shop_id: shopId }).sort({ payment_date: -1 }).lean();
+  const orders = await Order.find(
+    { _id: { $in: rows.map((row) => row.order_id) } },
+    { order_no: 1 },
+  ).lean();
+  const orderNos = new Map(orders.map((order) => [order._id, order.order_no]));
+
+  return ok(
+    res,
+    rows.map((row) => {
+      const amount = Number(row.amount) || 0;
+      const amount_received = Number(row.amount_received) || 0;
+      return {
+        id: row._id,
+        payment_date: row.payment_date,
+        amount,
+        amount_received,
+        balance: round2(Math.max(0, amount - amount_received)),
+        status: row.status,
+        collected_by: row.collected_by,
+        collected_date: row.collected_date,
+        expected_collection_date: row.expected_collection_date,
+        order_no: orderNos.get(row.order_id) ?? null,
+      };
+    }),
+  );
 }
 
 export async function listShopCollections(req: Request, res: Response) {

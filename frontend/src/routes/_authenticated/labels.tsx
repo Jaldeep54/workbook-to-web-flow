@@ -108,6 +108,7 @@ function StockDashboard({ onOrderSaved }: { onOrderSaved: (orderDate: string) =>
       string,
       {
         shopName: string;
+        shopCode: string;
         designType: number;
         stock: Record<string, { value: number; active: boolean }>;
         low: number;
@@ -116,6 +117,7 @@ function StockDashboard({ onOrderSaved }: { onOrderSaved: (orderDate: string) =>
     for (const row of rows) {
       const entry = map.get(row.shop_id) ?? {
         shopName: row.shop_name,
+        shopCode: row.shop_code,
         designType: row.design_type,
         stock: {},
         low: 0,
@@ -178,6 +180,7 @@ function StockDashboard({ onOrderSaved }: { onOrderSaved: (orderDate: string) =>
                   "klinzo-label-stock",
                   filtered.map((s) => ({
                     Shop: s.shopName,
+                    "Shop code": s.shopCode,
                     Design: s.designType,
                     ...Object.fromEntries(
                       labelProducts.map((lp) => [
@@ -231,7 +234,10 @@ function StockDashboard({ onOrderSaved }: { onOrderSaved: (orderDate: string) =>
               )}
               {pagination.pageRows.map((s) => (
                 <TableRow key={s.shopId}>
-                  <TableCell className="font-medium">{s.shopName}</TableCell>
+                  <TableCell className="font-medium">
+                    {s.shopName}
+                    <p className="text-xs font-normal text-muted-foreground">Code: {s.shopCode}</p>
+                  </TableCell>
                   <TableCell className="num text-right">{s.designType}</TableCell>
                   {labelProducts.map((lp) => {
                     const cell = s.stock[lp.id];
@@ -258,7 +264,7 @@ function StockDashboard({ onOrderSaved }: { onOrderSaved: (orderDate: string) =>
                         size="sm"
                         variant={s.low > 0 ? "default" : "outline"}
                         onClick={() => setOrderShopId(s.shopId)}
-                        aria-label={`Add a label order for ${s.shopName}`}
+                        aria-label={`Add a label order for ${s.shopName} (${s.shopCode})`}
                       >
                         <Plus className="size-3.5" /> Add order
                       </Button>
@@ -410,6 +416,7 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
                 Date: o.order_date ?? "",
                 "Folder name": shopById.get(o.shop_id)?.folder_name ?? "",
                 "Label name": shopById.get(o.shop_id)?.label_name ?? "",
+                "Shop code": shopById.get(o.shop_id)?.code ?? "",
                 "Shop Area": areaName(shopById.get(o.shop_id)?.area_id),
                 "Order no": o.order_no,
                 ...Object.fromEntries(
@@ -494,6 +501,9 @@ function LabelOrders({ month, setMonth }: { month: string; setMonth: (m: string)
                     <TableCell className="font-medium">
                       {primary}
                       {secondary && <p className="text-xs text-muted-foreground">{secondary}</p>}
+                      {shop?.code && (
+                        <p className="text-xs text-muted-foreground">Code: {shop.code}</p>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {areaName(shop?.area_id)}

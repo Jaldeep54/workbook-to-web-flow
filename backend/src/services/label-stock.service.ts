@@ -16,6 +16,7 @@ import { addMonths, currentMonth, round2 } from "../utils/date.js";
 export type LabelStockRow = {
   shop_id: string;
   shop_name: string;
+  shop_code: string;
   design_type: number;
   label_product_id: string;
   label_product_key: string;
@@ -64,7 +65,9 @@ async function usedQuantities(monthFilter?: { $gte: string; $lte: string }): Pro
 
 export async function labelStock(): Promise<LabelStockRow[]> {
   const [shops, labelProducts, shopProducts, received, used] = await Promise.all([
-    Shop.find({}, { shop_name: 1, design_type: 1 }).sort({ shop_name: 1 }).lean(),
+    Shop.find({ is_active: true }, { shop_name: 1, code: 1, design_type: 1 })
+      .sort({ shop_name: 1 })
+      .lean(),
     LabelProduct.find().sort({ sort_order: 1 }).lean(),
     ShopProduct.find({}, { shop_id: 1, product_id: 1 }).lean(),
     receivedLabels(),
@@ -88,6 +91,7 @@ export async function labelStock(): Promise<LabelStockRow[]> {
       rows.push({
         shop_id: shop._id,
         shop_name: shop.shop_name,
+        shop_code: shop.code,
         design_type: shop.design_type,
         label_product_id: lp._id,
         label_product_key: lp.key,
@@ -107,6 +111,7 @@ export async function labelStock(): Promise<LabelStockRow[]> {
 export type ShopLabelSummary = {
   shop_id: string;
   shop_name: string;
+  shop_code: string;
   design_type: number;
   low_stock_count: number;
   has_label_order: boolean;
@@ -125,6 +130,7 @@ export async function labelStockSummary(): Promise<ShopLabelSummary[]> {
     const entry = byShop.get(row.shop_id) ?? {
       shop_id: row.shop_id,
       shop_name: row.shop_name,
+      shop_code: row.shop_code,
       design_type: row.design_type,
       low_stock_count: 0,
       has_label_order: ordered.has(row.shop_id),

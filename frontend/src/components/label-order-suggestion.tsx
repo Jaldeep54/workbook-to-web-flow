@@ -585,6 +585,11 @@ export function LabelOrderSuggestionTab({
                       </TableCell>
                       <TableCell className="font-medium">
                         {g.shopName}
+                        {g.shopCode && (
+                          <p className="text-xs font-normal text-muted-foreground">
+                            Code: {g.shopCode}
+                          </p>
+                        )}
                         {hasDataIssue && (
                           <span
                             className="ml-1.5 text-xs text-destructive"

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { currentMonth } from "../src/utils/date.js";
 import {
   clearDomainCollections,
   expectError,
@@ -71,10 +72,11 @@ describe("Labels, stock and reorder suggestions", () => {
     expect(beforeRow.stock).toBe(received);
     expect(beforeRow.shop_sells_product).toBe(true);
 
+    const orderDate = `${currentMonth().slice(0, 7)}-03`;
     await admin.post("/orders").send({
       shop_id: shopId,
-      order_date: "2026-08-03",
-      delivery_date: "2026-08-03",
+      order_date: orderDate,
+      delivery_date: orderDate,
       order_lines: [{ product_id: dw200.id, qty: 30 }],
     });
 
@@ -214,6 +216,47 @@ describe("Labels, stock and reorder suggestions", () => {
         r.shop_id === shopId && r.label_product_id === dw200Label.id,
     ).stock;
     expect(after).toBe(before - 3 * dw200Label.labels_per_sheet);
+  });
+
+  it("excludes deactivated shops and distinguishes active shops with the same name", async () => {
+    const duplicate = await admin.post("/shops").send({
+      code: "L1-DUP",
+      shop_name: "Label Test Shop",
+      area_id: (await admin.get("/shops?search=Label%20Test%20Shop")).body.data[0].area_id,
+      product_ids: [dw200.id],
+    });
+    const duplicateId = duplicate.body.data.id;
+    await admin.post("/label-orders").send({
+      shop_id: duplicateId,
+      order_date: "2026-08-09",
+      lines: [{ label_product_id: dw200Label.id, sheets: 1 }],
+    });
+
+    const sameNameRows = (await admin.get("/labels/stock")).body.data.filter(
+      (row: { shop_name: string }) => row.shop_name === "Label Test Shop",
+    );
+    expect(sameNameRows.map((row: { shop_id: string }) => row.shop_id)).toEqual(
+      expect.arrayContaining([shopId, duplicateId]),
+    );
+    expect(sameNameRows.find((row: { shop_id: string }) => row.shop_id === duplicateId).shop_code)
+      .toBe("L1-DUP");
+
+    expect((await admin.post(`/shops/${duplicateId}/deactivate`)).status).toBe(200);
+    expect(
+      (await admin.get("/labels/stock")).body.data.some(
+        (row: { shop_id: string }) => row.shop_id === duplicateId,
+      ),
+    ).toBe(false);
+    expect(
+      (await admin.get("/labels/stock-summary")).body.data.some(
+        (row: { shop_id: string }) => row.shop_id === duplicateId,
+      ),
+    ).toBe(false);
+    expect(
+      (await admin.get("/labels/suggestions")).body.data.some(
+        (row: { shop_id: string }) => row.shop_id === duplicateId,
+      ),
+    ).toBe(false);
   });
 
   it("validates label order payloads", async () => {

@@ -242,6 +242,7 @@ export type LabelOrderRecord = {
 export type LabelStockRow = {
   shop_id: string;
   shop_name: string;
+  shop_code: string;
   design_type: number;
   label_product_id: string;
   label_product_key: string;
@@ -256,6 +257,7 @@ export type LabelStockRow = {
 export type ShopLabelSummary = {
   shop_id: string;
   shop_name: string;
+  shop_code: string;
   design_type: number;
   low_stock_count: number;
   has_label_order: boolean;

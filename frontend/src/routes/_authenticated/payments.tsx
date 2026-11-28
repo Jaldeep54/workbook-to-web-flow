@@ -337,12 +337,6 @@ export function PaymentsPage({
         }
       />
 
-      {shopFilter === "all" && canUpdate && (
-        <p className="mb-4 text-xs text-muted-foreground">
-          Select one shop to apply Money Change to its individual bills.
-        </p>
-      )}
-
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
           label="Billed this month"
@@ -476,7 +470,7 @@ export function PaymentsPage({
                     <ReceivedControl payment={p} {...rowProps} className="justify-end" />
                   </TableCell>
                   <TableCell>
-                    <MoneyChangeControl payment={p} {...rowProps} canEdit={shopFilter !== "all"} />
+                    <MoneyChangeControl payment={p} {...rowProps} />
                   </TableCell>
                   <TableCell
                     className={cn(
@@ -539,7 +533,7 @@ export function PaymentsPage({
                 <ReceivedControl payment={p} {...rowProps} className="justify-end" />
               </RecordField>
               <RecordField label="Money Change">
-                <MoneyChangeControl payment={p} {...rowProps} canEdit={shopFilter !== "all"} />
+                <MoneyChangeControl payment={p} {...rowProps} />
               </RecordField>
               <RecordField label="Collected by" align="stretch">
                 <CollectorControl payment={p} {...rowProps} className="w-full sm:max-w-[260px]" />
@@ -623,8 +617,7 @@ function MoneyChangeControl({
   canUpdate,
   pending,
   onMoneyChange,
-  canEdit,
-}: RowProps & { canEdit: boolean }) {
+}: RowProps) {
   const maximumChange = Math.max(0, payment.amount - payment.amount_received);
   return (
     <Input
@@ -636,12 +629,12 @@ function MoneyChangeControl({
       inputMode="decimal"
       defaultValue={payment.money_change_applied || ""}
       placeholder="0"
-      readOnly={!canUpdate || !canEdit}
+      readOnly={!canUpdate}
       disabled={pending}
       aria-label={`Money Change applied to ${payment.shops?.shop_name ?? "shop"} bill`}
       className="num h-9 w-[110px] text-right sm:h-8"
-      title={canEdit ? "Money Change applied to this bill" : "Select a shop to edit Money Change"}
-      onBlur={(event) => canUpdate && canEdit && onMoneyChange(payment, event.target.value)}
+      title="Money Change applied to this bill"
+      onBlur={(event) => canUpdate && onMoneyChange(payment, event.target.value)}
       onKeyDown={(event) => {
         if (event.key === "Enter") event.currentTarget.blur();
       }}

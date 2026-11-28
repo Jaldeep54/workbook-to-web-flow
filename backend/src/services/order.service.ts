@@ -146,6 +146,7 @@ export async function setOrderDelivered(
     // status is re-derived so a re-priced order that is now only part paid
     // stops claiming to be Received.
     const received = Number(existingPayment.amount_received) || 0;
+    const moneyChangeApplied = Number(existingPayment.money_change_applied) || 0;
     const amount = existingPayment.status === "Received" ? existingPayment.amount : totals.total_sales;
     await Payment.updateOne(
       { order_id: orderId },
@@ -154,7 +155,7 @@ export async function setOrderDelivered(
           shop_id: order.shop_id,
           amount,
           amount_received: received,
-          status: derivePaymentStatus(amount, received),
+          status: derivePaymentStatus(amount, received, moneyChangeApplied),
         },
       },
     );

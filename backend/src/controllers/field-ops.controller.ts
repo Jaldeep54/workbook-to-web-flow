@@ -116,12 +116,16 @@ export async function listShopPayments(req: Request, res: Response) {
     rows.map((row) => {
       const amount = Number(row.amount) || 0;
       const amount_received = Number(row.amount_received) || 0;
+      const money_change_applied = Number(row.money_change_applied) || 0;
       return {
         id: row._id,
+        shop_id: row.shop_id,
+        order_id: row.order_id,
         payment_date: row.payment_date,
         amount,
         amount_received,
-        balance: round2(Math.max(0, amount - amount_received)),
+        money_change_applied,
+        balance: round2(Math.max(0, amount - amount_received - money_change_applied)),
         status: row.status,
         collected_by: row.collected_by,
         collected_date: row.collected_date,

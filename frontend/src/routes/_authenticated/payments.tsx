@@ -16,7 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { PaymentMoneyChangeDialog } from "@/components/payment-money-change-dialog";
 import {
   Select,
   SelectContent,
@@ -33,7 +32,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { RequirePermission } from "@/components/require-permission";
-import { useAuth } from "@/hooks/useAuth";
 import { RESOURCES, usePermissions } from "@/hooks/usePermissions";
 import {
   paymentsApi,
@@ -79,6 +77,7 @@ type RowProps = {
   canUpdate: boolean;
   pending: boolean;
   onReceived: (payment: PaymentRecord, raw: string) => void;
+  onMoneyChange: (payment: PaymentRecord, raw: string) => void;
   onSettle: (payment: PaymentRecord) => void;
   onCollector: (payment: PaymentRecord, userId: string | null) => void;
   onCollectedDate: (payment: PaymentRecord, date: string | null) => void;
@@ -96,8 +95,7 @@ type RowProps = {
  * status is therefore never picked from a dropdown here — it is shown.
  *
  * The records appear as a table on a desktop and as stacked cards on a phone.
- * Both are driven by the same state and the same mutations, and both render
- * the same four controls below, so the two can never drift apart.
+ * Both are driven by the same state and mutations.
  */
 export function PaymentsPage({
   availableShops,
@@ -105,15 +103,11 @@ export function PaymentsPage({
   availableShops?: FieldShop[] | ShopWithImage[];
 } = {}) {
   const qc = useQueryClient();
-  const { user } = useAuth();
   const { can } = usePermissions();
   const canUpdate =
     can(RESOURCES.payments, "update") ||
     can(RESOURCES.fieldOperationsPayments, "view") ||
     can(RESOURCES.fieldOperations, "view");
-  const canManagePaid =
-    canUpdate && (can(RESOURCES.payments, "update") || user?.role?.fieldRole === "manager");
-
   const [fy, setFy] = useState(currentFinancialYear());
   const [month, setMonth] = useState(currentMonth());
   const [shopFilter, setShopFilter] = useState("all");
@@ -201,6 +195,7 @@ export function PaymentsPage({
         collected_by_user_id?: string | null;
         collected_date?: string | null;
         expected_collection_date?: string | null;
+        money_change_applied?: number;
       };
     }) => paymentsApi.update(id, patch),
     onSuccess: (payment) => {
@@ -230,16 +225,25 @@ export function PaymentsPage({
   /** Commits a typed-in received amount, ignoring anything that isn't a change. */
   const commitReceived = (payment: PaymentRecord, raw: string) => {
     const value = raw.trim() === "" ? 0 : Number(raw);
-    if (Number.isNaN(value) || value < 0) {
+    if (!Number.isFinite(value) || value < 0) {
       toast.error("Enter the amount received as a number");
-      return;
-    }
-    if (value > payment.amount) {
-      toast.error(`That is more than the ${inr(payment.amount)} owed on this order`);
       return;
     }
     if (value === Number(payment.amount_received)) return;
     update.mutate({ id: payment.id, patch: { amount_received: value } });
+  };
+
+  const commitMoneyChange = (payment: PaymentRecord, raw: string) => {
+    const value = raw.trim() === "" ? 0 : Number(raw);
+    if (value === Number(payment.money_change_applied ?? 0)) return;
+    const maximumChange = Math.max(0, payment.amount - payment.amount_received);
+    if (!Number.isFinite(value) || value < 0 || value > maximumChange) {
+      toast.error(
+        `Money Change cannot exceed this bill's remaining balance (${inr(maximumChange)})`,
+      );
+      return;
+    }
+    update.mutate({ id: payment.id, patch: { money_change_applied: value } });
   };
 
   const rowProps = {
@@ -247,6 +251,7 @@ export function PaymentsPage({
     pending: update.isPending,
     collectors,
     onReceived: commitReceived,
+    onMoneyChange: commitMoneyChange,
     onSettle: (payment: PaymentRecord) =>
       update.mutate({ id: payment.id, patch: { amount_received: payment.amount } }),
     onCollector: (payment: PaymentRecord, userId: string | null) =>
@@ -316,6 +321,7 @@ export function PaymentsPage({
                     "Order no": p.orders?.order_no ?? "",
                     "Bill amount": p.amount,
                     Received: p.amount_received,
+                    "Money Change": p.money_change_applied,
                     "Balance due": p.balance,
                     Status: p.status ?? "",
                     "Collected by": p.collected_by ?? "",
@@ -327,17 +333,15 @@ export function PaymentsPage({
             >
               <Download className="size-4" /> Export
             </Button>
-            <PaymentMoneyChangeDialog
-              shops={shops}
-              month={month}
-              shopId={shopFilter}
-              areaId={areaFilter}
-              canUpdate={canUpdate}
-              canManagePaid={canManagePaid}
-            />
           </>
         }
       />
+
+      {shopFilter === "all" && canUpdate && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          Select one shop to apply Money Change to its individual bills.
+        </p>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
@@ -391,7 +395,7 @@ export function PaymentsPage({
               {totals.collectedPct}%
             </p>
           </div>
-          <Progress value={totals.collectedPct} className="h-2" />
+          <Progress value={Math.min(100, totals.collectedPct)} className="h-2" />
         </div>
       )}
 
@@ -407,6 +411,7 @@ export function PaymentsPage({
                 <TableHead className="text-right">Order</TableHead>
                 <TableHead className="whitespace-nowrap text-right">Bill amount</TableHead>
                 <TableHead className="text-right">Received</TableHead>
+                <TableHead className="text-right">Money Change</TableHead>
                 <TableHead className="text-right">Balance</TableHead>
                 <TableHead
                   aria-sort={
@@ -441,7 +446,7 @@ export function PaymentsPage({
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
                     Loading payments…
                   </TableCell>
                 </TableRow>
@@ -469,6 +474,9 @@ export function PaymentsPage({
                   <TableCell className="num text-right font-semibold">{inr(p.amount)}</TableCell>
                   <TableCell>
                     <ReceivedControl payment={p} {...rowProps} className="justify-end" />
+                  </TableCell>
+                  <TableCell>
+                    <MoneyChangeControl payment={p} {...rowProps} canEdit={shopFilter !== "all"} />
                   </TableCell>
                   <TableCell
                     className={cn(
@@ -530,6 +538,9 @@ export function PaymentsPage({
               <RecordField label="Received">
                 <ReceivedControl payment={p} {...rowProps} className="justify-end" />
               </RecordField>
+              <RecordField label="Money Change">
+                <MoneyChangeControl payment={p} {...rowProps} canEdit={shopFilter !== "all"} />
+              </RecordField>
               <RecordField label="Collected by" align="stretch">
                 <CollectorControl payment={p} {...rowProps} className="w-full sm:max-w-[260px]" />
               </RecordField>
@@ -578,7 +589,6 @@ function ReceivedControl({
         key={`${payment.id}-${payment.amount_received}`}
         type="number"
         min={0}
-        max={payment.amount}
         step="0.01"
         inputMode="decimal"
         defaultValue={payment.amount_received || ""}
@@ -605,6 +615,37 @@ function ReceivedControl({
         </Button>
       )}
     </div>
+  );
+}
+
+function MoneyChangeControl({
+  payment,
+  canUpdate,
+  pending,
+  onMoneyChange,
+  canEdit,
+}: RowProps & { canEdit: boolean }) {
+  const maximumChange = Math.max(0, payment.amount - payment.amount_received);
+  return (
+    <Input
+      key={`${payment.id}-${payment.money_change_applied ?? 0}`}
+      type="number"
+      min={0}
+      max={maximumChange}
+      step="0.01"
+      inputMode="decimal"
+      defaultValue={payment.money_change_applied || ""}
+      placeholder="0"
+      readOnly={!canUpdate || !canEdit}
+      disabled={pending}
+      aria-label={`Money Change applied to ${payment.shops?.shop_name ?? "shop"} bill`}
+      className="num h-9 w-[110px] text-right sm:h-8"
+      title={canEdit ? "Money Change applied to this bill" : "Select a shop to edit Money Change"}
+      onBlur={(event) => canUpdate && canEdit && onMoneyChange(payment, event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+    />
   );
 }
 

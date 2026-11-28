@@ -57,6 +57,7 @@ export type PendingDelivery = {
   delivery_date: string | null;
   amount: number;
   amount_received: number;
+  money_change_applied: number;
   balance: number;
 };
 
@@ -83,6 +84,7 @@ export async function pendingDeliveries(shopId: string): Promise<PendingDelivery
     .map((p) => {
       const amount = Number(p.amount) || 0;
       const received = Number(p.amount_received) || 0;
+      const moneyChangeApplied = Number(p.money_change_applied) || 0;
       return {
         payment_id: p._id,
         order_id: p.order_id,
@@ -90,7 +92,8 @@ export async function pendingDeliveries(shopId: string): Promise<PendingDelivery
         delivery_date: deliveryDate.get(p.order_id) ?? p.payment_date ?? null,
         amount,
         amount_received: received,
-        balance: round2(Math.max(0, amount - received)),
+        money_change_applied: moneyChangeApplied,
+        balance: round2(Math.max(0, amount - received - moneyChangeApplied)),
       };
     })
     .filter((p) => p.balance > 0)
@@ -115,8 +118,6 @@ export type CollectionInput = {
 
 /**
  * "Make Payment": applies the collector's explicit per-bill allocations.
- * Change money is recorded separately and does not alter the amount applied
- * to bills.
  *
  * Each payment is written with a guard on the amount it was read at, so two
  * people collecting from the same shop at once can't both spend the same
@@ -176,7 +177,11 @@ export async function recordCollection(input: CollectionInput) {
         {
           $set: {
             amount_received: received,
-            status: derivePaymentStatus(row.amount, received),
+            status: derivePaymentStatus(
+              row.amount,
+              received,
+              Number(row.money_change_applied) || 0,
+            ),
             collected_date: input.collectionDate,
             collected_by: input.collectedBy.name,
             collected_by_user_id: input.collectedBy.id,

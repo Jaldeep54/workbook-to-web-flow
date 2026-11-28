@@ -198,7 +198,9 @@ export const paymentUpdateSchema = z
     expected_collection_date: isoDate.nullish(),
     amount: z.coerce.number().min(0).optional(),
     /** Running total of what the shop has actually handed over. */
-    amount_received: z.coerce.number().min(0).optional(),
+    amount_received: z.coerce.number().finite().min(0).optional(),
+    /** Per-bill credit that reduces the balance without changing cash received. */
+    money_change_applied: z.coerce.number().finite().min(0).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, "Provide at least one field to update");
 

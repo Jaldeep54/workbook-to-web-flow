@@ -418,33 +418,7 @@ function NewOrderSection({ shops, scoped }: { shops: FieldShop[]; scoped: boolea
 /* ---------------------------------------------------------------- payments */
 
 function PaymentsSection({ shops }: { shops: FieldShop[] }) {
-  const [tab, setTab] = useState<"payments" | "collections">("payments");
-
-  return (
-    <div className="space-y-4">
-      <div className="inline-flex rounded-xl border border-border bg-card p-1">
-        <Button
-          variant={tab === "payments" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setTab("payments")}
-        >
-          Payments
-        </Button>
-        <Button
-          variant={tab === "collections" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setTab("collections")}
-        >
-          Collections
-        </Button>
-      </div>
-      {tab === "payments" ? (
-        <PaymentsPage availableShops={shops} />
-      ) : (
-        <CollectionsSection shops={shops} />
-      )}
-    </div>
-  );
+  return <PaymentsPage availableShops={shops} />;
 }
 
 function CollectionsSection({ shops }: { shops: FieldShop[] }) {

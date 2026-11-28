@@ -285,11 +285,50 @@ describe("Orders, deliveries and payments", () => {
     expect(cleared.body.data.balance).toBeCloseTo(payment.amount, 2);
   });
 
-  it("refuses a payment larger than the order is worth", async () => {
-    const payments = await admin.get("/payments?month=2026-08-01");
-    const payment = payments.body.data[0];
+  it("allows an overpayment and clamps the bill balance at zero", async () => {
+    const order = await createOrder(11, "2030-01-20");
+    await admin.patch(`/orders/${order.body.data.id}/status`).send({ status: "Delivered" });
+    const payments = await admin.get("/payments?month=2030-01-01");
+    const payment = payments.body.data.find(
+      (row: { order_id: string }) => row.order_id === order.body.data.id,
+    );
+    const overpaid = await admin
+      .patch(`/payments/${payment.id}`)
+      .send({ amount_received: payment.amount + 1 });
+    expect(overpaid.status).toBe(200);
+    expect(overpaid.body.data.amount_received).toBe(payment.amount + 1);
+    expect(overpaid.body.data.balance).toBe(0);
+    expect(overpaid.body.data.status).toBe("Received");
+  });
+
+  it("applies Money Change to an individual bill balance, separately from cash received", async () => {
+    const order = await createOrder(12, "2030-01-21");
+    await admin.patch(`/orders/${order.body.data.id}/status`).send({ status: "Delivered" });
+    const payments = await admin.get("/payments?month=2030-01-01");
+    const payment = payments.body.data.find(
+      (row: { order_id: string }) => row.order_id === order.body.data.id,
+    );
+    const applied = await admin
+      .patch(`/payments/${payment.id}`)
+      .send({ money_change_applied: payment.amount / 2 });
+    expect(applied.status).toBe(200);
+    expect(applied.body.data.amount_received).toBe(0);
+    expect(applied.body.data.money_change_applied).toBeCloseTo(payment.amount / 2, 2);
+    expect(applied.body.data.balance).toBeCloseTo(payment.amount / 2, 2);
+    expect(applied.body.data.status).toBe("Partial");
+    const shopBills = await admin.get(`/field-ops/shops/${shopId}/payments`);
+    const bill = shopBills.body.data.find((row: { id: string }) => row.id === payment.id);
+    expect(bill.money_change_applied).toBeCloseTo(payment.amount / 2, 2);
+    expect(bill.balance).toBeCloseTo(payment.amount / 2, 2);
+    const pending = await admin.get(`/field-ops/shops/${shopId}/pending`);
+    const pendingBill = pending.body.data.deliveries.find(
+      (row: { payment_id: string }) => row.payment_id === payment.id,
+    );
+    expect(pendingBill.balance).toBeCloseTo(payment.amount / 2, 2);
     expectError(
-      await admin.patch(`/payments/${payment.id}`).send({ amount_received: payment.amount + 1 }),
+      await admin
+        .patch(`/payments/${payment.id}`)
+        .send({ money_change_applied: payment.amount + 1 }),
       400,
     );
   });

@@ -251,23 +251,26 @@ payment has already been received.
 
 Payments are raised by the delivery flow — there is no create endpoint.
 
-A shop settles its bill in instalments, so a payment carries two money figures:
-`amount`, what the order is worth, and `amount_received`, the running total of
-what has actually been handed over. Every row also returns `balance`
-(`amount − amount_received`, never negative), and **`status` is derived from
-the two, never set independently**:
+A shop settles its bill in instalments, so a payment carries `amount`, what
+the order is worth, `amount_received`, the running total of cash handed over,
+and `money_change_applied`, a shop-specific credit applied to this bill.
+Every row returns `balance`
+(`max(0, amount − amount_received − money_change_applied)`), and **`status` is
+derived from the money values, never set independently**:
 
-| received | status |
+| received + Money Change | status |
 |---|---|
 | nothing | `Pending` |
 | less than `amount` | `Partial` |
 | `amount` or more | `Received` |
 
 `PATCH` accepts
-`{ amount?, amount_received?, status?, collected_by?, collected_by_user_id?, collected_date? }`.
-Sending `amount_received` above `amount` is a 400. A `status` sent on its own is
-shorthand for a money movement — `Received` settles the bill in full, `Pending`
-withdraws the collection — and the derived status is recomputed either way.
+`{ amount?, amount_received?, money_change_applied?, status?, collected_by?, collected_by_user_id?, collected_date? }`.
+`amount_received` may exceed `amount`; the balance remains zero or higher.
+`money_change_applied` is a per-bill credit and cannot exceed the remaining
+balance when increased. A `status` sent on its own is shorthand for a cash
+movement — `Received` settles the bill in full, `Pending` withdraws the cash
+collection — and the derived status is recomputed either way.
 
 `collected_by_user_id` names one of the accounts from `/payments/collectors`
 (every active user). The API copies that account's name onto `collected_by`, so
@@ -277,14 +280,11 @@ deactivated.
 `search` matches the payment's shop by name, billing name, label or code, and
 intersects with `areaId` and `shopId` rather than replacing them.
 
-The Field Operations Payments screen uses these same payment records and
-endpoints, automatically restricted to the signed-in field user's shops.
-Money-change records are the existing collection records with a positive
-`change_money`; the Payments screen can record a collection with bill
-allocations and change, adjust the change amount, and mark it paid or unpaid.
-Changing payment or change-money data is reflected by the collection, bill,
-cash-position and team activity views because no duplicate payment ledger is
-created.
+The Payments screen applies Money Change to individual bill rows, with edits
+available after filtering to one shop. The applied amount reduces that bill's
+balance without changing its received-cash total. Legacy collection-level
+`change_money` records remain available to existing collection, cash-position
+and team-activity APIs; they are separate from `money_change_applied`.
 
 > Payments written before `amount_received` existed are filled in by
 > `npm run seed`, which treats a `Received` row as fully paid and every other
@@ -306,9 +306,10 @@ grant remains supported as access to all four tabs.
 | POST | `/field-ops/shops/:id/collections` | Payments tab |
 | DELETE | `/field-ops/collections/:id` | Payments tab |
 
-Field Operations → Payments embeds the complete Payments screen (including
-filters, export, bill collection details and Money Change) over the same
-payment API, and retains the per-shop collection workflow.
+Field Operations → Payments embeds the Payments screen over the same payment
+API. Money Change is editable per bill after filtering to one shop; the
+Collections tab has been removed. Collection endpoints remain available for
+existing API clients.
 
 `GET /field-ops/shops/:id/payments` lists every bill for the in-scope shop,
 including settled bills, with received amount, balance, status, collector,
@@ -328,9 +329,9 @@ collection date and expected collection date.
 ```
 
 Each bill can be listed once, and its allocation cannot exceed its current
-balance. The collection amount is the sum applied to bills; `change_money` is
-tracked separately and does not change those allocations. The Field Operations
-shop list includes each shop's all-time `pending_balance`.
+balance. The collection amount is the sum applied to bills; legacy
+`change_money` is tracked separately and does not change those allocations.
+The Field Operations shop list includes each shop's all-time `pending_balance`.
 
 ## Label orders and stock
 

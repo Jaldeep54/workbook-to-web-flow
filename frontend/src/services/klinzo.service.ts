@@ -197,6 +197,7 @@ export type PaymentRecord = {
   expected_collection_date?: string | null;
   amount: number;
   amount_received: number;
+  money_change_applied: number;
   balance: number;
   shops: ShopRef;
   orders: { order_no: number } | null;
@@ -234,6 +235,7 @@ export const paymentsApi = {
       collected_date?: string | null;
       expected_collection_date?: string | null;
       amount_received?: number;
+      money_change_applied?: number;
     },
   ) => api.patch<PaymentRecord>(`/payments/${id}`, payload),
 };
@@ -512,6 +514,7 @@ export type ShopHistory = {
     /** What the order is worth; `amount_received` is what has come in so far. */
     amount: number;
     amount_received: number;
+    money_change_applied?: number;
   }>;
 };
 
@@ -590,15 +593,19 @@ export type PendingDelivery = {
   delivery_date: string | null;
   amount: number;
   amount_received: number;
+  money_change_applied?: number;
   balance: number;
 };
 
 /** A bill in Field Operations, including settled bills and collection details. */
 export type FieldOpsPayment = {
   id: string;
+  shop_id: string;
+  order_id: string;
   payment_date: string | null;
   amount: number;
   amount_received: number;
+  money_change_applied: number;
   balance: number;
   status: string;
   collected_by: string | null;

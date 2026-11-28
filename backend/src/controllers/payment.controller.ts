@@ -25,15 +25,14 @@ import { RESOURCES } from "../config/permissions.js";
  * details. There is deliberately no create endpoint: a payment without a
  * delivery has nothing to be a payment for.
  *
- * A shop settles its bill in instalments, so a payment carries both what it is
- * worth (`amount`) and what has actually come in (`amount_received`). The
- * balance still owed is the difference between them, and `status` is always
- * derived from the two — never chosen independently.
+ * A shop settles bills with received cash and bill-specific Money Change
+ * credits. The balance and status are derived from those values.
  */
 function present(payment: IPayment, shops: Map<string, ShopRef>, orderNos: Map<string, number>) {
   const { _id, shop_id, order_id, ...rest } = payment;
   const amount = Number(payment.amount) || 0;
   const amount_received = Number(payment.amount_received) || 0;
+  const money_change_applied = Number(payment.money_change_applied) || 0;
   return {
     id: _id,
     shop_id,
@@ -41,8 +40,9 @@ function present(payment: IPayment, shops: Map<string, ShopRef>, orderNos: Map<s
     ...rest,
     amount,
     amount_received,
-    /** What the shopkeeper still owes on this order; never negative. */
-    balance: round2(Math.max(0, amount - amount_received)),
+    money_change_applied,
+    /** What remains after cash received and shop-specific money change; never negative. */
+    balance: round2(Math.max(0, amount - amount_received - money_change_applied)),
     shops: shops.get(shop_id) ?? null,
     orders: orderNos.has(order_id) ? { order_no: orderNos.get(order_id)! } : null,
   };
@@ -264,17 +264,22 @@ export async function updatePayment(req: Request, res: Response) {
     expected_collection_date?: string | null;
     amount?: number;
     amount_received?: number;
+    money_change_applied?: number;
   };
 
   if (body.amount !== undefined) payment.amount = body.amount;
 
   if (body.amount_received !== undefined) {
-    if (body.amount_received > payment.amount) {
+    payment.amount_received = body.amount_received;
+  }
+  if (body.money_change_applied !== undefined) {
+    const maximumChange = Math.max(0, payment.amount - payment.amount_received);
+    if (body.money_change_applied > maximumChange) {
       throw ApiError.badRequest(
-        "A shop cannot pay more than the order is worth — reduce the received amount, or correct the order first",
+        "Money Change cannot be greater than the bill's remaining balance",
       );
     }
-    payment.amount_received = body.amount_received;
+    payment.money_change_applied = round2(body.money_change_applied);
   } else if (body.status !== undefined) {
     /**
      * A status sent on its own is shorthand for a money movement: "Received"
@@ -307,7 +312,11 @@ export async function updatePayment(req: Request, res: Response) {
 
   // Recomputed here as well as in the model's hook, so the value is right in
   // this response even if a future write path skips validation.
-  payment.status = derivePaymentStatus(payment.amount, payment.amount_received);
+  payment.status = derivePaymentStatus(
+    payment.amount,
+    payment.amount_received,
+    payment.money_change_applied,
+  );
 
   await payment.save();
 

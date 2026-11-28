@@ -301,35 +301,53 @@ describe("Orders, deliveries and payments", () => {
     expect(overpaid.body.data.status).toBe("Received");
   });
 
-  it("applies Money Change to an individual bill balance, separately from cash received", async () => {
+  it("derives Money Change as the extra cash paid beyond the bill", async () => {
     const order = await createOrder(12, "2030-01-21");
     await admin.patch(`/orders/${order.body.data.id}/status`).send({ status: "Delivered" });
     const payments = await admin.get("/payments?month=2030-01-01");
     const payment = payments.body.data.find(
       (row: { order_id: string }) => row.order_id === order.body.data.id,
     );
+
+    // Bill X, received X + 20 → Money Change 20, nothing owed.
+    const overpaid = await admin
+      .patch(`/payments/${payment.id}`)
+      .send({ amount_received: payment.amount + 20 });
+    expect(overpaid.status).toBe(200);
+    expect(overpaid.body.data.money_change_applied).toBeCloseTo(20, 2);
+    expect(overpaid.body.data.balance).toBe(0);
+    expect(overpaid.body.data.status).toBe("Received");
+
+    // Entering Money Change directly means the full bill plus that much arrived.
     const applied = await admin
       .patch(`/payments/${payment.id}`)
-      .send({ money_change_applied: payment.amount / 2 });
+      .send({ money_change_applied: 35 });
     expect(applied.status).toBe(200);
-    expect(applied.body.data.amount_received).toBe(0);
-    expect(applied.body.data.money_change_applied).toBeCloseTo(payment.amount / 2, 2);
-    expect(applied.body.data.balance).toBeCloseTo(payment.amount / 2, 2);
-    expect(applied.body.data.status).toBe("Partial");
+    expect(applied.body.data.amount_received).toBeCloseTo(payment.amount + 35, 2);
+    expect(applied.body.data.money_change_applied).toBeCloseTo(35, 2);
+    expect(applied.body.data.balance).toBe(0);
+
     const shopBills = await admin.get(`/field-ops/shops/${shopId}/payments`);
     const bill = shopBills.body.data.find((row: { id: string }) => row.id === payment.id);
-    expect(bill.money_change_applied).toBeCloseTo(payment.amount / 2, 2);
-    expect(bill.balance).toBeCloseTo(payment.amount / 2, 2);
+    expect(bill.money_change_applied).toBeCloseTo(35, 2);
+    expect(bill.balance).toBe(0);
+
+    // Underpaying leaves a balance and no Money Change.
+    const partial = await admin
+      .patch(`/payments/${payment.id}`)
+      .send({ amount_received: payment.amount / 2 });
+    expect(partial.body.data.money_change_applied).toBe(0);
+    expect(partial.body.data.balance).toBeCloseTo(payment.amount / 2, 2);
+    expect(partial.body.data.status).toBe("Partial");
     const pending = await admin.get(`/field-ops/shops/${shopId}/pending`);
     const pendingBill = pending.body.data.deliveries.find(
       (row: { payment_id: string }) => row.payment_id === payment.id,
     );
     expect(pendingBill.balance).toBeCloseTo(payment.amount / 2, 2);
+
     expectError(
-      await admin
-        .patch(`/payments/${payment.id}`)
-        .send({ money_change_applied: payment.amount + 1 }),
-      400,
+      await admin.patch(`/payments/${payment.id}`).send({ money_change_applied: -1 }),
+      422,
     );
   });
 

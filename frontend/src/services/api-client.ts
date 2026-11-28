@@ -66,25 +66,60 @@ export function setUnauthenticatedHandler(handler: (() => void) | null): void {
   onUnauthenticated = handler;
 }
 
+/** Failures worth retrying: the server or network hiccuped, the session is fine. */
+export function isTransientFailure(error: unknown): boolean {
+  if (error instanceof ApiError) return error.status === 0 || isTransientStatus(error.status);
+  // fetch rejects with a TypeError when the network itself fails.
+  return error instanceof TypeError;
+}
+
+function isTransientStatus(status: number): boolean {
+  return status >= 500 || status === 408 || status === 429;
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const RETRY_DELAYS_MS = [600, 1500, 3000];
+
 /**
  * Exchanges the httpOnly refresh cookie for a new access token. Concurrent
  * callers share one in-flight request so a burst of 401s can't stampede.
+ *
+ * Resolves `false` only when the API says the session is over (401/403).
+ * A cold start, dropped database connection or network blip is retried, and
+ * if it still fails the promise rejects — the caller must not treat a server
+ * hiccup as a sign-out, or every flaky reload logs the user out.
  */
 export async function refreshSession(): Promise<boolean> {
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-        });
-        if (!response.ok) return false;
-        const payload = await response.json();
-        accessToken = payload?.data?.accessToken ?? null;
-        return Boolean(accessToken);
-      } catch {
-        return false;
+        for (let attempt = 0; ; attempt++) {
+          let status = 0;
+          try {
+            const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+              method: "POST",
+              credentials: "include",
+              headers: { "content-type": "application/json" },
+            });
+            if (response.ok) {
+              const payload = await response.json();
+              accessToken = payload?.data?.accessToken ?? null;
+              return Boolean(accessToken);
+            }
+            if (!isTransientStatus(response.status)) return false;
+            status = response.status;
+          } catch {
+            // Network failure — retried below like a 5xx.
+          }
+          if (attempt >= RETRY_DELAYS_MS.length) {
+            throw new ApiError(
+              status,
+              "SESSION_UNAVAILABLE",
+              "Couldn't reach the server to restore your session",
+            );
+          }
+          await wait(RETRY_DELAYS_MS[attempt]);
+        }
       } finally {
         // Cleared on the next tick so simultaneous callers all observe the
         // same result before a new attempt can start.
@@ -167,6 +202,7 @@ async function send<T>(
   let response = await execute();
 
   if (response.status === 401 && !skipAuthRetry) {
+    // Rejects on a server hiccup: the request fails, the session survives.
     const refreshed = await refreshSession();
     if (refreshed) {
       response = await execute();

@@ -233,16 +233,18 @@ export function PaymentsPage({
     update.mutate({ id: payment.id, patch: { amount_received: value } });
   };
 
+  /**
+   * Money Change is the extra cash paid beyond the bill (bill 570, received
+   * 590 → 20). Typing it in records that the full bill plus this much arrived;
+   * the API sets Received to match.
+   */
   const commitMoneyChange = (payment: PaymentRecord, raw: string) => {
     const value = raw.trim() === "" ? 0 : Number(raw);
-    if (value === Number(payment.money_change_applied ?? 0)) return;
-    const maximumChange = Math.max(0, payment.amount - payment.amount_received);
-    if (!Number.isFinite(value) || value < 0 || value > maximumChange) {
-      toast.error(
-        `Money Change cannot exceed this bill's remaining balance (${inr(maximumChange)})`,
-      );
+    if (!Number.isFinite(value) || value < 0) {
+      toast.error("Enter the Money Change as a number");
       return;
     }
+    if (value === Number(payment.money_change_applied ?? 0)) return;
     update.mutate({ id: payment.id, patch: { money_change_applied: value } });
   };
 
@@ -618,22 +620,20 @@ function MoneyChangeControl({
   pending,
   onMoneyChange,
 }: RowProps) {
-  const maximumChange = Math.max(0, payment.amount - payment.amount_received);
   return (
     <Input
       key={`${payment.id}-${payment.money_change_applied ?? 0}`}
       type="number"
       min={0}
-      max={maximumChange}
       step="0.01"
       inputMode="decimal"
       defaultValue={payment.money_change_applied || ""}
       placeholder="0"
       readOnly={!canUpdate}
       disabled={pending}
-      aria-label={`Money Change applied to ${payment.shops?.shop_name ?? "shop"} bill`}
+      aria-label={`Money Change (extra paid) on ${payment.shops?.shop_name ?? "shop"} bill`}
       className="num h-9 w-[110px] text-right sm:h-8"
-      title="Money Change applied to this bill"
+      title="Extra cash paid beyond the bill"
       onBlur={(event) => canUpdate && onMoneyChange(payment, event.target.value)}
       onKeyDown={(event) => {
         if (event.key === "Enter") event.currentTarget.blur();

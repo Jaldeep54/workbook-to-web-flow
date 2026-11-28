@@ -257,12 +257,13 @@ Payments are raised by the delivery flow — there is no create endpoint.
 
 A shop settles its bill in instalments, so a payment carries `amount`, what
 the order is worth, `amount_received`, the running total of cash handed over,
-and `money_change_applied`, a shop-specific credit applied to this bill.
-Every row returns `balance`
-(`max(0, amount − amount_received − money_change_applied)`), and **`status` is
-derived from the money values, never set independently**:
+and `money_change_applied` (Money Change), the extra cash paid beyond the bill:
+`max(0, amount_received − amount)` — a ₹570 bill paid with ₹590 has ₹20 Money
+Change. Every row returns `balance` (`max(0, amount − amount_received)`), and
+**`status` and Money Change are derived from the money values, never set
+independently**:
 
-| received + Money Change | status |
+| received | status |
 |---|---|
 | nothing | `Pending` |
 | less than `amount` | `Partial` |
@@ -270,9 +271,9 @@ derived from the money values, never set independently**:
 
 `PATCH` accepts
 `{ amount?, amount_received?, money_change_applied?, status?, collected_by?, collected_by_user_id?, collected_date? }`.
-`amount_received` may exceed `amount`; the balance remains zero or higher.
-`money_change_applied` is a per-bill credit and cannot exceed the remaining
-balance when increased. A `status` sent on its own is shorthand for a cash
+`amount_received` may exceed `amount`; the excess becomes Money Change and the
+balance stays at zero. Sending `money_change_applied` instead records that the
+full bill plus that much arrived (`amount_received = amount + money_change_applied`). A `status` sent on its own is shorthand for a cash
 movement — `Received` settles the bill in full, `Pending` withdraws the cash
 collection — and the derived status is recomputed either way.
 
@@ -284,9 +285,8 @@ deactivated.
 `search` matches the payment's shop by name, billing name, label or code, and
 intersects with `areaId` and `shopId` rather than replacing them.
 
-The Payments screen applies Money Change to individual bill rows, with edits
-available after filtering to one shop. The applied amount reduces that bill's
-balance without changing its received-cash total. Legacy collection-level
+The Payments screen shows Money Change on every bill row and lets it be typed
+in directly; Received and Money Change always stay consistent with each other. Legacy collection-level
 `change_money` records remain available to existing collection, cash-position
 and team-activity APIs; they are separate from `money_change_applied`.
 

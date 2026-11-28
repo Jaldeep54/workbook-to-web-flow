@@ -9,7 +9,12 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { getAccessToken, refreshSession, setUnauthenticatedHandler } from "@/services/api-client";
+import {
+  getAccessToken,
+  isTransientFailure,
+  refreshSession,
+  setUnauthenticatedHandler,
+} from "@/services/api-client";
 import {
   fetchMe,
   login as loginRequest,
@@ -32,6 +37,9 @@ import {
 type AuthState = {
   user: AuthUser | null;
   loading: boolean;
+  /** Set when the session couldn't be restored because the server was unreachable. */
+  sessionError: string | null;
+  retrySession: () => void;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -40,6 +48,8 @@ type AuthState = {
 const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
+  sessionError: null,
+  retrySession: () => {},
   signIn: async () => {},
   signOut: async () => {},
   refreshUser: async () => {},
@@ -50,10 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
+      setLoading(true);
+      setSessionError(null);
       try {
         if (!getAccessToken()) {
           const restored = await refreshSession();
@@ -62,10 +77,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
         }
-        const me = await fetchMe();
+        const me = await fetchMeWithRetry();
         if (!cancelled) setUser(me);
-      } catch {
-        if (!cancelled) setUser(null);
+      } catch (error) {
+        if (cancelled) return;
+        // Only a definite "no session" signs the user out. A server or
+        // network failure keeps them here with a retry, so a flaky reload
+        // never bounces them to the login page.
+        if (isTransientFailure(error)) {
+          setSessionError(error instanceof Error ? error.message : "Couldn't reach the server");
+        } else {
+          setUser(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -74,7 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [restoreAttempt]);
+
+  const retrySession = useCallback(() => setRestoreAttempt((n) => n + 1), []);
 
   // When a refresh finally fails, the session is over — drop the user and any
   // cached data belonging to them.
@@ -106,11 +131,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthState>(
-    () => ({ user, loading, signIn, signOut, refreshUser }),
-    [user, loading, signIn, signOut, refreshUser],
+    () => ({ user, loading, sessionError, retrySession, signIn, signOut, refreshUser }),
+    [user, loading, sessionError, retrySession, signIn, signOut, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/** `/auth/me` on boot, retried through a cold start or dropped connection. */
+async function fetchMeWithRetry(): Promise<AuthUser> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetchMe();
+    } catch (error) {
+      if (attempt >= 2 || !isTransientFailure(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
+    }
+  }
 }
 
 export const useAuth = () => useContext(AuthContext);

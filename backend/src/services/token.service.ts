@@ -74,9 +74,19 @@ export async function issueRefreshToken(
 }
 
 /**
+ * How long a just-rotated token is still accepted. A rotation's response can
+ * be lost — the page is reloaded while `/auth/refresh` is in flight (common on
+ * a slow serverless cold start), or two tabs refresh at the same moment — and
+ * the browser then still holds the old cookie. Without this window that
+ * innocent retry looks like theft and signs the user out everywhere.
+ */
+export const REFRESH_REUSE_GRACE_MS = 2 * 60 * 1000;
+
+/**
  * Rotates a refresh token: the presented token is revoked and a fresh one
  * issued. Presenting an already-revoked token is treated as replay/theft and
- * revokes every live token for that user.
+ * revokes every live token for that user — unless it was rotated (not signed
+ * out or revoked) within REFRESH_REUSE_GRACE_MS, which is a lost response.
  */
 export async function rotateRefreshToken(
   presented: string,
@@ -86,6 +96,15 @@ export async function rotateRefreshToken(
   const stored = await RefreshToken.findOne({ tokenHash });
 
   if (!stored) throw ApiError.unauthorized("Invalid refresh token");
+
+  const rotatedRecently =
+    stored.revokedAt &&
+    stored.replacedByTokenHash &&
+    Date.now() - stored.revokedAt.getTime() < REFRESH_REUSE_GRACE_MS &&
+    stored.expiresAt.getTime() > Date.now();
+  if (rotatedRecently) {
+    return { userId: stored.user, token: await issueRefreshToken(stored.user, context) };
+  }
 
   if (stored.revokedAt) {
     await RefreshToken.updateMany(

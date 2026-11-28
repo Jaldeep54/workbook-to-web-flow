@@ -1,6 +1,6 @@
 import { Schema, model } from "mongoose";
 
-import { monthKey } from "../utils/date.js";
+import { monthKey, round2 } from "../utils/date.js";
 import { ISO_DATE_MATCH, schemaOptions, uuidId } from "./base.js";
 
 /**
@@ -166,26 +166,32 @@ export interface IPayment {
    * exceed the bill when a shop pays more than the exact amount due.
    */
   amount_received: number;
-  /** Credit applied to this bill as money change, separate from cash received. */
+  /**
+   * Money Change: the extra cash handed over beyond the bill, i.e.
+   * `max(0, amount_received − amount)` — bill 570, received 590 → 20. Always
+   * derived from the two figures above; stored so reports can read it directly.
+   */
   money_change_applied: number;
   created_at?: Date;
   updated_at?: Date;
 }
 
-/**
- * A payment's status is derived from cash received plus the bill-specific
- * Money Change credit, never chosen independently.
- */
-export function derivePaymentStatus(
-  amount: number,
-  amountReceived: number,
-  moneyChangeApplied = 0,
-): PaymentStatus {
+/** Extra cash paid beyond the bill — never negative. */
+export function moneyChangeFor(amount: number, amountReceived: number): number {
+  return round2(Math.max(0, (Number(amountReceived) || 0) - (Number(amount) || 0)));
+}
+
+/** What the shop still owes on the bill — never negative. */
+export function balanceFor(amount: number, amountReceived: number): number {
+  return round2(Math.max(0, (Number(amount) || 0) - (Number(amountReceived) || 0)));
+}
+
+/** A payment's status is derived from the cash received, never chosen independently. */
+export function derivePaymentStatus(amount: number, amountReceived: number): PaymentStatus {
   const due = Number(amount) || 0;
   const paid = Number(amountReceived) || 0;
-  const change = Number(moneyChangeApplied) || 0;
-  if (paid + change <= 0) return "Pending";
-  if (paid + change >= due) return "Received";
+  if (paid <= 0) return "Pending";
+  if (paid >= due) return "Received";
   return "Partial";
 }
 
@@ -213,9 +219,10 @@ paymentSchema.index({ shop_id: 1, payment_date: -1 });
 paymentSchema.index({ status: 1 });
 paymentSchema.index({ collected_by_user_id: 1 });
 
-/** Keeps `status` aligned with cash received and applied money change. */
+/** Keeps `status` and Money Change aligned with the bill and the cash received. */
 paymentSchema.pre("validate", function syncStatus(next) {
-  this.status = derivePaymentStatus(this.amount, this.amount_received, this.money_change_applied);
+  this.status = derivePaymentStatus(this.amount, this.amount_received);
+  this.money_change_applied = moneyChangeFor(this.amount, this.amount_received);
   next();
 });
 

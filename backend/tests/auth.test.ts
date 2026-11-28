@@ -1,6 +1,9 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { RefreshToken } from "../src/models/refresh-token.model.js";
+import { REFRESH_REUSE_GRACE_MS } from "../src/services/token.service.js";
+
 import {
   API,
   expectError,
@@ -87,7 +90,20 @@ describe("Authentication", () => {
     expect(first.status).toBe(200);
     expect(first.body.data.accessToken).toBeTruthy();
 
-    // The original cookie has now been rotated away — replaying it must fail.
+    // A lost rotation response (reload mid-refresh, two tabs) leaves the
+    // browser holding the old cookie; a prompt retry must not sign them out.
+    const retry = await request(server).post(`${API}/auth/refresh`).set("Cookie", cookie);
+    expect(retry.status).toBe(200);
+    const retried = await request(server)
+      .post(`${API}/auth/refresh`)
+      .set("Cookie", retry.headers["set-cookie"]);
+    expect(retried.status).toBe(200);
+
+    // Outside the grace window the rotated-away cookie is a replay and fails.
+    await RefreshToken.updateMany(
+      { revokedAt: { $ne: null } },
+      { $set: { revokedAt: new Date(Date.now() - REFRESH_REUSE_GRACE_MS - 1000) } },
+    );
     const replay = await request(server).post(`${API}/auth/refresh`).set("Cookie", cookie);
     expectError(replay, 401);
   });

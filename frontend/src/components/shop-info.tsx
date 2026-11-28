@@ -198,12 +198,7 @@ function ShopInfoList({
 
   const payments = data.payments as Array<(typeof data.payments)[number] & { order_id?: string }>;
   const pending = payments.reduce(
-    (s, p) =>
-      s +
-      Math.max(
-        0,
-        Number(p.amount) - Number(p.amount_received) - Number(p.money_change_applied ?? 0),
-      ),
+    (s, p) => s + Math.max(0, Number(p.amount) - Number(p.amount_received)),
     0,
   );
   return (
@@ -218,10 +213,7 @@ function ShopInfoList({
         <div className="divide-y divide-border rounded-xl border border-border">
           {payments.map((p) => {
             const moneyChangeApplied = Number(p.money_change_applied ?? 0);
-            const balance = Math.max(
-              0,
-              Number(p.amount) - Number(p.amount_received) - moneyChangeApplied,
-            );
+            const balance = Math.max(0, Number(p.amount) - Number(p.amount_received));
             return (
               <div key={p.id} className="space-y-1 p-3">
                 <div className="flex items-center justify-between gap-2">

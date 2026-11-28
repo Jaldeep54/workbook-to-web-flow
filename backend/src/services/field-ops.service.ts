@@ -1,5 +1,12 @@
 import { Collection, type CollectionAllocation } from "../models/collection.model.js";
-import { Delivery, Order, Payment, derivePaymentStatus } from "../models/order.model.js";
+import {
+  Delivery,
+  Order,
+  Payment,
+  balanceFor,
+  derivePaymentStatus,
+  moneyChangeFor,
+} from "../models/order.model.js";
 import { Role, type FieldRole } from "../models/role.model.js";
 import { Shop } from "../models/shop.model.js";
 import { User } from "../models/user.model.js";
@@ -84,7 +91,6 @@ export async function pendingDeliveries(shopId: string): Promise<PendingDelivery
     .map((p) => {
       const amount = Number(p.amount) || 0;
       const received = Number(p.amount_received) || 0;
-      const moneyChangeApplied = Number(p.money_change_applied) || 0;
       return {
         payment_id: p._id,
         order_id: p.order_id,
@@ -92,8 +98,8 @@ export async function pendingDeliveries(shopId: string): Promise<PendingDelivery
         delivery_date: deliveryDate.get(p.order_id) ?? p.payment_date ?? null,
         amount,
         amount_received: received,
-        money_change_applied: moneyChangeApplied,
-        balance: round2(Math.max(0, amount - received - moneyChangeApplied)),
+        money_change_applied: moneyChangeFor(amount, received),
+        balance: balanceFor(amount, received),
       };
     })
     .filter((p) => p.balance > 0)
@@ -177,11 +183,8 @@ export async function recordCollection(input: CollectionInput) {
         {
           $set: {
             amount_received: received,
-            status: derivePaymentStatus(
-              row.amount,
-              received,
-              Number(row.money_change_applied) || 0,
-            ),
+            status: derivePaymentStatus(row.amount, received),
+            money_change_applied: moneyChangeFor(row.amount, received),
             collected_date: input.collectionDate,
             collected_by: input.collectedBy.name,
             collected_by_user_id: input.collectedBy.id,

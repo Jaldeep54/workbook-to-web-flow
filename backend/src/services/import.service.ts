@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 
 import { LabelProduct, Product } from "../models/catalogue.model.js";
 import { VariableCost } from "../models/finance.model.js";
-import { LabelOrder, Order, Payment, derivePaymentStatus } from "../models/order.model.js";
+import { LabelOrder, Order, Payment, derivePaymentStatus, moneyChangeFor } from "../models/order.model.js";
 import { Shop } from "../models/shop.model.js";
 import { monthKey, round2, toIsoDate } from "../utils/date.js";
 import { setOrderDelivered } from "./order.service.js";
@@ -251,6 +251,7 @@ export async function importWorkbook(buffer: Buffer): Promise<ImportResult> {
             collected_by: text(pick(row, ["Collected By", "Received By"])) || null,
             amount,
             amount_received,
+            money_change_applied: moneyChangeFor(amount, amount_received),
           },
           $setOnInsert: { order_id },
         },

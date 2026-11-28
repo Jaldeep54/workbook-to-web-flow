@@ -1,7 +1,14 @@
 import type { Request, Response } from "express";
 
 import { Collection } from "../models/collection.model.js";
-import { Order, Payment, derivePaymentStatus, type IPayment } from "../models/order.model.js";
+import {
+  Order,
+  Payment,
+  balanceFor,
+  derivePaymentStatus,
+  moneyChangeFor,
+  type IPayment,
+} from "../models/order.model.js";
 import { Role } from "../models/role.model.js";
 import { Shop } from "../models/shop.model.js";
 import { User } from "../models/user.model.js";
@@ -25,14 +32,13 @@ import { RESOURCES } from "../config/permissions.js";
  * details. There is deliberately no create endpoint: a payment without a
  * delivery has nothing to be a payment for.
  *
- * A shop settles bills with received cash and bill-specific Money Change
- * credits. The balance and status are derived from those values.
+ * A shop settles bills with cash. Balance, status and Money Change (the extra
+ * cash paid beyond the bill) are all derived from the bill and cash received.
  */
 function present(payment: IPayment, shops: Map<string, ShopRef>, orderNos: Map<string, number>) {
   const { _id, shop_id, order_id, ...rest } = payment;
   const amount = Number(payment.amount) || 0;
   const amount_received = Number(payment.amount_received) || 0;
-  const money_change_applied = Number(payment.money_change_applied) || 0;
   return {
     id: _id,
     shop_id,
@@ -40,9 +46,10 @@ function present(payment: IPayment, shops: Map<string, ShopRef>, orderNos: Map<s
     ...rest,
     amount,
     amount_received,
-    money_change_applied,
-    /** What remains after cash received and shop-specific money change; never negative. */
-    balance: round2(Math.max(0, amount - amount_received - money_change_applied)),
+    /** Extra cash paid beyond the bill — bill 570, received 590 → 20. */
+    money_change_applied: moneyChangeFor(amount, amount_received),
+    /** What the shop still owes; never negative. */
+    balance: balanceFor(amount, amount_received),
     shops: shops.get(shop_id) ?? null,
     orders: orderNos.has(order_id) ? { order_no: orderNos.get(order_id)! } : null,
   };
@@ -269,17 +276,12 @@ export async function updatePayment(req: Request, res: Response) {
 
   if (body.amount !== undefined) payment.amount = body.amount;
 
-  if (body.amount_received !== undefined) {
-    payment.amount_received = body.amount_received;
-  }
   if (body.money_change_applied !== undefined) {
-    const maximumChange = Math.max(0, payment.amount - payment.amount_received);
-    if (body.money_change_applied > maximumChange) {
-      throw ApiError.badRequest(
-        "Money Change cannot be greater than the bill's remaining balance",
-      );
-    }
-    payment.money_change_applied = round2(body.money_change_applied);
+    // Money Change is the extra paid beyond the bill, so entering it means the
+    // shop handed over the full bill plus that much.
+    payment.amount_received = round2(payment.amount + body.money_change_applied);
+  } else if (body.amount_received !== undefined) {
+    payment.amount_received = body.amount_received;
   } else if (body.status !== undefined) {
     /**
      * A status sent on its own is shorthand for a money movement: "Received"
@@ -312,11 +314,8 @@ export async function updatePayment(req: Request, res: Response) {
 
   // Recomputed here as well as in the model's hook, so the value is right in
   // this response even if a future write path skips validation.
-  payment.status = derivePaymentStatus(
-    payment.amount,
-    payment.amount_received,
-    payment.money_change_applied,
-  );
+  payment.status = derivePaymentStatus(payment.amount, payment.amount_received);
+  payment.money_change_applied = moneyChangeFor(payment.amount, payment.amount_received);
 
   await payment.save();
 

@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { Delivery, LabelOrder, Order, Payment } from "../models/order.model.js";
+import { Delivery, Order, Payment } from "../models/order.model.js";
 import { Role } from "../models/role.model.js";
 import { Shop, ShopArea, ShopProduct, type IShop } from "../models/shop.model.js";
 import { User } from "../models/user.model.js";
@@ -33,7 +33,7 @@ export async function listShops(req: Request, res: Response) {
 
   const filter: Record<string, unknown> = {};
   if (req.query.areaId) filter.area_id = req.query.areaId;
-  if (req.query.isActive) filter.is_active = req.query.isActive === "true";
+  filter.is_active = req.query.isActive === "false" ? false : true;
   if (!can(req.user!.permissions, RESOURCES.shops, "view")) {
     const { filter: fieldScope } = await fieldScopeFor(req.user!.id);
     filter.$and = [...(Array.isArray(filter.$and) ? filter.$and : []), fieldScope];
@@ -179,11 +179,6 @@ export async function updateShop(req: Request, res: Response) {
   return ok(res, { ...present(shop.toObject()), product_ids: links.map((l) => l.product_id) });
 }
 
-/**
- * "Deleting" a shop deactivates it: its orders, deliveries, payments and label
- * orders are history and must survive. A hard delete is only offered when the
- * shop has never traded.
- */
 export async function deactivateShop(req: Request, res: Response) {
   const shop = await Shop.findById(req.params.id);
   if (!shop) throw ApiError.notFound("Shop not found");
@@ -194,23 +189,7 @@ export async function deactivateShop(req: Request, res: Response) {
 }
 
 export async function deleteShop(req: Request, res: Response) {
-  const shop = await Shop.findById(req.params.id);
-  if (!shop) throw ApiError.notFound("Shop not found");
-
-  const [orders, labelOrders] = await Promise.all([
-    Order.countDocuments({ shop_id: shop._id }),
-    LabelOrder.countDocuments({ shop_id: shop._id }),
-  ]);
-  if (orders > 0 || labelOrders > 0) {
-    throw ApiError.conflict(
-      "This shop has trading history and cannot be permanently deleted — deactivate it instead",
-    );
-  }
-
-  await ShopProduct.deleteMany({ shop_id: shop._id });
-  await deleteShopImage(shop.image_path);
-  await shop.deleteOne();
-  return ok(res, { message: "Shop deleted" });
+  return deactivateShop(req, res);
 }
 
 /**

@@ -75,7 +75,6 @@ import {
   shopHandlersQuery,
   shopSalespersonsQuery,
   shopProductsQuery,
-  shopsQuery,
 } from "@/lib/queries";
 import { isHeicPath } from "@/lib/shop-image";
 import { downloadCsv } from "@/lib/export";
@@ -241,7 +240,11 @@ function SalespersonSelect({
 
 function ShopsPage() {
   const qc = useQueryClient();
-  const { data: shops = [], isLoading } = useQuery(shopsQuery);
+  const [shopStatus, setShopStatus] = useState<"active" | "inactive">("active");
+  const { data: shops = [], isLoading } = useQuery({
+    queryKey: ["shops", "management", shopStatus],
+    queryFn: () => shopsApi.list({ isActive: shopStatus === "active" }),
+  });
   const { data: products = [] } = useQuery(productsQuery);
   const { data: shopProducts = [] } = useQuery(shopProductsQuery);
   const { data: areas = [] } = useQuery(shopAreasQuery);
@@ -327,7 +330,7 @@ function ShopsPage() {
   }, [filtered, sort]);
 
   const pagination = usePagination(sorted, {
-    resetKey: `${search}-${areaFilter}-${handlerFilter}-${designFilter}`,
+    resetKey: `${shopStatus}-${search}-${areaFilter}-${handlerFilter}-${designFilter}`,
   });
 
   const toggleSort = (key: SortKey) =>
@@ -401,11 +404,10 @@ function ShopsPage() {
   });
 
   const archive = useMutation({
-    // "Delete" deactivates: a shop's orders, deliveries and payments are
-    // history and are never removed with it.
+    // "Delete" deactivates; the shop and all related data remain intact.
     mutationFn: (shop: Shop) => shopsApi.deactivate(shop.id),
     onSuccess: () => {
-      toast.success("Shop deleted");
+      toast.success("Shop deactivated");
       closeDelete();
       setDetailsShop(null);
       void qc.invalidateQueries({ queryKey: ["shops"] });
@@ -481,7 +483,7 @@ function ShopsPage() {
     <>
       <PageHeader
         title="Shops"
-        description={`${shops.length} shops — the workbook's 100+ shop sheets in one searchable table`}
+        description={`${shops.length} ${shopStatus} shops — the workbook's 100+ shop sheets in one searchable table`}
         actions={
           <>
             <Button
@@ -728,8 +730,9 @@ function ShopsPage() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete {deletingShop?.shop_name}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This deactivates the shop and hides it from active lists. Its historical orders,
-                  deliveries, payments and label orders are kept — nothing is permanently deleted.
+                  This deactivates the shop and hides it from active lists. The shop, product links,
+                  image, orders, deliveries, payments, collections and label orders are kept —
+                  nothing is permanently deleted.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -755,6 +758,18 @@ function ShopsPage() {
               className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
             />
           </div>
+          <Select
+            value={shopStatus}
+            onValueChange={(value) => setShopStatus(value === "inactive" ? "inactive" : "active")}
+          >
+            <SelectTrigger className="w-full bg-card sm:w-[150px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active shops</SelectItem>
+              <SelectItem value="inactive">Inactive shops</SelectItem>
+            </SelectContent>
+          </Select>
           <ShopAreaFilter value={areaFilter} onChange={setAreaFilter} />
           {/* Only people who can currently be assigned are offered — the
               same active, shop-handling users the form's picker lists. A shop

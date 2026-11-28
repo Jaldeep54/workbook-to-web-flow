@@ -133,7 +133,7 @@ still assigned to users can't be deleted (409).
 | POST | `/shops/:id/image` | `shops:update` |
 | DELETE | `/shops/:id/image` | `shops:update` |
 | POST | `/shops/:id/deactivate` | `shops:delete` |
-| DELETE | `/shops/:id` | `shops:manage` |
+| DELETE | `/shops/:id` | `shops:manage` (soft-deactivates) |
 | GET | `/shops/:id/analysis` | `shops:view` |
 | GET | `/shops/:id/history` | `shops:view` |
 | GET | `/shop-areas` | `shop_areas:view` |
@@ -155,8 +155,12 @@ still assigned to users can't be deleted (409).
   therefore survives the account being deactivated or deleted.
 - `POST /shops/:id/image` is `multipart/form-data` with an `image` field
   (JPG/PNG/HEIC/HEIF). Responses carry `image_url`, a short-lived signed link.
-- `DELETE /shops/:id` only succeeds for a shop with no trading history;
-  otherwise use `/deactivate`, which is what the UI's "Delete shop" does.
+- `POST /shops/:id/deactivate` and `DELETE /shops/:id` both soft-deactivate the
+  shop. The shop, product links, image, orders, deliveries, payments,
+  collections and label orders remain intact. Reactivate it with
+  `PATCH /shops/:id` and `{ "is_active": true }`.
+- `GET /shops` returns active shops by default. Pass `isActive=false` to list
+  inactive shops for review or reactivation.
 - `POST /shop-areas` is find-or-create, case- and whitespace-insensitive: it
   returns 200 with the existing area, or 201 with a new one.
 - `GET /shop-areas` returns `shop_count` per area — how many shops sit in it.

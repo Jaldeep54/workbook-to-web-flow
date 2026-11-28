@@ -1,6 +1,9 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { Collection } from "../src/models/collection.model.js";
+import { Delivery, LabelOrder, Order, Payment } from "../src/models/order.model.js";
+import { ShopProduct } from "../src/models/shop.model.js";
 import {
   API,
   clearDomainCollections,
@@ -73,6 +76,27 @@ describe("Shops, areas and files", () => {
     expect(response.status).toBe(201);
     expect(response.body.data.latitude).toBeNull();
     expect(response.body.data.longitude).toBeNull();
+  });
+
+  it("deactivates an unused shop instead of permanently deleting it", async () => {
+    const created = await admin.post("/shops").send({
+      code: "UNUSED-SHOP",
+      shop_name: "Unused Shop",
+      area_id: areaId,
+      product_ids: productIds.slice(0, 1),
+    });
+    expect(created.status).toBe(201);
+
+    const deleted = await admin.delete(`/shops/${created.body.data.id}`);
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.data.is_active).toBe(false);
+    expect((await admin.get(`/shops/${created.body.data.id}`)).body.data).toMatchObject({
+      id: created.body.data.id,
+      is_active: false,
+      product_ids: productIds.slice(0, 1),
+    });
+    expect((await admin.get("/shops?search=Unused Shop")).body.data).toHaveLength(0);
+    expect(await ShopProduct.countDocuments({ shop_id: created.body.data.id })).toBe(1);
   });
 
   it("rejects duplicate shop codes and invalid coordinates", async () => {
@@ -196,21 +220,69 @@ describe("Shops, areas and files", () => {
     expectError(await admin.get("/shops?sortBy=passwordHash"), 400);
   });
 
-  it("deactivates a shop with history instead of deleting it", async () => {
+  it("soft-deactivates shops without deleting the shop or any related data", async () => {
     const shop = (await admin.get("/shops?search=Krishna")).body.data[0];
-    await admin.post("/orders").send({
+    const order = await admin.post("/orders").send({
       shop_id: shop.id,
       order_date: "2026-08-01",
       delivery_date: "2026-08-01",
       order_lines: [{ product_id: productIds[0], qty: 1 }],
     });
-
-    expectError(await admin.delete(`/shops/${shop.id}`), 409);
+    expect(order.status).toBe(201);
+    expect(
+      (
+        await admin
+          .patch(`/orders/${order.body.data.id}/status`)
+          .send({ status: "Delivered", delivery_date: "2026-08-01" })
+      ).status,
+    ).toBe(200);
+    const labelOrder = await LabelOrder.create({
+      shop_id: shop.id,
+      order_no: 1,
+      order_date: "2026-08-01",
+      total_labels: 1,
+    });
+    const collection = await Collection.create({
+      shop_id: shop.id,
+      collection_date: "2026-08-01",
+      amount: 1,
+    });
+    const productLinkCount = await ShopProduct.countDocuments({ shop_id: shop.id });
 
     const deactivated = await admin.post(`/shops/${shop.id}/deactivate`);
     expect(deactivated.status).toBe(200);
     expect(deactivated.body.data.is_active).toBe(false);
-    expect((await admin.get("/shops?isActive=false")).body.data.length).toBeGreaterThan(0);
+    expect(
+      (await admin.get(`/shops?search=Krishna&isActive=true`)).body.data.some(
+        (row: { id: string }) => row.id === shop.id,
+      ),
+    ).toBe(false);
+    expect(
+      (await admin.get(`/shops?search=Krishna&isActive=false`)).body.data.some(
+        (row: { id: string }) => row.id === shop.id,
+      ),
+    ).toBe(true);
+
+    const storedShop = await admin.get(`/shops/${shop.id}`);
+    expect(storedShop.body.data).toMatchObject({
+      id: shop.id,
+      shop_name: shop.shop_name,
+      is_active: false,
+      product_ids: expect.arrayContaining(productIds),
+    });
+    expect(await ShopProduct.countDocuments({ shop_id: shop.id })).toBe(productLinkCount);
+    expect(await Order.exists({ _id: order.body.data.id, shop_id: shop.id })).toBeTruthy();
+    expect(await Delivery.exists({ order_id: order.body.data.id, shop_id: shop.id })).toBeTruthy();
+    expect(await Payment.exists({ order_id: order.body.data.id, shop_id: shop.id })).toBeTruthy();
+    expect(await LabelOrder.exists({ _id: labelOrder._id, shop_id: shop.id })).toBeTruthy();
+    expect(await Collection.exists({ _id: collection._id, shop_id: shop.id })).toBeTruthy();
+
+    const reactivated = await admin.patch(`/shops/${shop.id}`).send({ is_active: true });
+    expect(reactivated.body.data.is_active).toBe(true);
+    expect((await admin.get(`/shops?search=Krishna&isActive=true`)).body.data).toContainEqual(
+      expect.objectContaining({ id: shop.id }),
+    );
+    expect((await admin.get(`/shops/${shop.id}/history`)).body.data.orders).toHaveLength(1);
   });
 
   it("finds or creates areas case-insensitively", async () => {
